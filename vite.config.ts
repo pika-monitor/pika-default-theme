@@ -6,10 +6,10 @@ import path from 'path';
 export default defineConfig(({command}) => ({
     base: command === 'serve' ? '/' : '/t/',
     plugins: [react(), tailwindcss()],
-    publicDir: path.resolve(__dirname, 'public'),
-    resolve: {alias: {'@': path.resolve(__dirname, './src')}},
+    publicDir: path.resolve(import.meta.dirname, 'public'),
+    resolve: {alias: {'@': path.resolve(import.meta.dirname, './src')}},
     build: {
-        outDir: path.resolve(__dirname, 'dist'),
+        outDir: path.resolve(import.meta.dirname, 'dist'),
         emptyOutDir: true,
         assetsDir: 'assets',
     },

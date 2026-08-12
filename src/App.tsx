@@ -2,7 +2,7 @@ import {lazy, Suspense} from 'react';
 import {BrowserRouter, Route, Routes} from 'react-router-dom';
 import {ColorModeProvider} from './contexts/ColorMode';
 
-const PublicLayout = lazy(() => import('./pages/PublicLayout'));
+const PublicLayout = lazy(() => import('./layouts/PublicLayout'));
 const ServerList = lazy(() => import('./pages/ServerList'));
 const ServerDetail = lazy(() => import('./pages/ServerDetail'));
 const MonitorList = lazy(() => import('./pages/MonitorList'));
