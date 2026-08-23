@@ -19,7 +19,7 @@ import {
 import {pika} from '../api';
 import type {LatestMetrics, TagsResponse} from '../types';
 import {cn, formatBytes, formatSpeed, formatUptime, isExpired, isExpiringSoon} from '../lib/utils';
-import {AgentExpiryBadge, AgentOfflineState, Card, ErrorState, LoadingSpinner, MetricBar, StatCard, StatusBadge, StatusSummary} from '../components/index';
+import {AgentExpiryBadge, AgentOfflineState, Card, ErrorState, LoadingSpinner, MetricBar, StatCard, StatusSummary} from '../components/index';
 import {hasAgentResourcePressure, isAgentOnline, isAgentTrafficNearLimit, type AgentWithMetrics} from '../domain/agents/agent-view-model';
 import PublicPageContainer from '../layouts/PublicPageContainer';
 
@@ -89,14 +89,11 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
     return (
         <Link to={`/servers/${server.id.substring(0, 8)}`} className="block h-full">
             <Card className="h-full space-y-2 p-5" interactive>
-                    {/* 顶部：名称和状态 */}
+                    {/* 顶部：名称和设备标签 */}
                     <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
-                            <div className="flex min-w-0 items-center gap-2">
-                                <div className="min-w-0 truncate font-mono text-base font-bold text-content">
-                                    {server.name || server.hostname}
-                                </div>
-                                {isOnline && <StatusBadge status="up"/>}
+                            <div className="min-w-0 truncate font-mono text-base font-bold text-content">
+                                {server.name || server.hostname}
                             </div>
                             <div
                                 className="flex items-center gap-2 text-xs text-content-secondary mt-1 font-mono uppercase">
@@ -576,11 +573,8 @@ const ServerList = () => {
                                         <td className="p-4 align-middle">
                                             <div className="flex items-center gap-4">
                                                 <div className="space-y-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="font-mono text-sm font-bold text-content transition-colors">
-                                                            {server.name}
-                                                        </div>
-                                                        {isOnline && <StatusBadge status="up"/>}
+                                                    <div className="font-mono text-sm font-bold text-content transition-colors">
+                                                        {server.name}
                                                     </div>
                                                     <div
                                                         className="flex items-center gap-2 text-xs text-content-secondary mt-1 font-mono uppercase">

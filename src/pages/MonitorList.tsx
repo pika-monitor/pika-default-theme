@@ -5,7 +5,7 @@ import {AlertTriangle, BarChart3, CheckCircle2, Globe, Loader2, Maximize2, Searc
 import {pika} from '../api';
 import type {MonitorSparklinePoint, PublicMonitor, PublicMonitorSparklinesResponse} from '../types';
 import {cn, formatDateTime} from '../lib/utils';
-import {Card, CertificateBadge, ErrorState, MonitorTypeIcon, StatCard, StatusBadge, StatusSummary} from '../components/index';
+import {Card, CertificateBadge, ErrorState, StatCard, StatusBadge, StatusSummary} from '../components/index';
 import {
     canSearchMonitorTarget,
     getCertificateHealth,
@@ -83,22 +83,16 @@ const MonitorCard = ({monitor, displayMode, sparkline}: {
     return (
         <Card className="h-full p-5" interactive>
             {/* 头部 */}
-            <div className="flex justify-between items-start mb-4">
-                <div className="flex gap-3 flex-1 min-w-0">
-                    <div
-                        className="flex-shrink-0 rounded-control border border-line bg-panel-muted p-2.5">
-                        <MonitorTypeIcon type={monitor.type}/>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <h3 className="truncate text-sm font-bold tracking-wide text-content transition-colors group-hover:text-brand">
-                            {monitor.name}
-                        </h3>
-                        <div className="text-xs font-mono text-content-secondary/80 mb-0.5 tracking-wider truncate">
-                            {publicTarget}
-                        </div>
+            <div className="mb-4 flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-sm font-bold tracking-wide text-content transition-colors group-hover:text-brand">
+                        {monitor.name}
+                    </h3>
+                    <div className="mb-0.5 truncate font-mono text-xs tracking-wider text-content-secondary/80">
+                        {publicTarget}
                     </div>
                 </div>
-                <div className="flex-shrink-0 ml-2">
+                <div className="shrink-0">
                     <StatusBadge status={getMonitorHealth(monitor)}/>
                 </div>
             </div>
