@@ -2,7 +2,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {useNavigate, useParams} from 'react-router-dom';
 import {useQuery} from '@tanstack/react-query';
 import {Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts';
-import {AlertCircle, ArrowLeft, ChevronDown, ChevronUp, Clock, MapPin, RotateCcw, ShieldCheck} from 'lucide-react';
+import {AlertCircle, ArrowLeft, ChevronDown, ChevronUp, Clock, MapPin, RotateCcw} from 'lucide-react';
 import {PikaAPIError, pika} from '../api';
 import type {AgentMonitorStat, MetricsResponse, PublicMonitor} from '../types';
 import {AGENT_COLORS, MONITOR_TIME_RANGE_OPTIONS} from '../constants';
@@ -114,12 +114,7 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
     }
 
     return (
-        <Card className="p-4 sm:p-6">
-            <div className="mb-4 sm:mb-6">
-                <h3 className="text-base font-semibold text-content sm:text-lg">探针监控详情</h3>
-                <p className="text-xs text-content-secondary mt-1 font-mono">各探针的当前状态和统计数据</p>
-            </div>
-
+        <Card title="探针监控详情">
             {/* 移动端卡片布局 */}
             <div className="block lg:hidden space-y-3">
                 {monitorStats.map((stat, index) => {
@@ -537,12 +532,8 @@ const ResponseTimeChart = ({monitorId, monitorStats, available}: ResponseTimeCha
 
     if (!available) {
         return (
-            <Card className="p-6">
-                <div>
-                    <h3 className="text-lg font-semibold text-content">响应时间趋势</h3>
-                    <p className="mt-1 font-mono text-xs text-content-secondary">监控各探针的响应时间变化</p>
-                </div>
-                <div className="mt-6 flex items-center gap-2 border-t border-line pt-4 font-mono text-xs text-danger">
+            <Card title="响应时间趋势">
+                <div className="flex items-center gap-2 font-mono text-xs text-danger">
                     <AlertCircle className="h-4 w-4 shrink-0"/>
                     <span>服务当前不可用，已隐藏可能过期的响应时间与趋势数据。</span>
                 </div>
@@ -552,24 +543,17 @@ const ResponseTimeChart = ({monitorId, monitorStats, available}: ResponseTimeCha
 
     if (isHistoryError) {
         return (
-            <Card className="p-6">
-                <div>
-                    <h3 className="text-lg font-semibold text-content">响应时间趋势</h3>
-                    <p className="mt-1 font-mono text-xs text-content-secondary">监控各探针的响应时间变化</p>
-                </div>
-                <ErrorState className="mt-6 min-h-[220px]" message="响应时间历史数据加载失败。" onRetry={() => void refetchHistory()}/>
+            <Card title="响应时间趋势">
+                <ErrorState className="min-h-[220px]" message="响应时间历史数据加载失败。" onRetry={() => void refetchHistory()}/>
             </Card>
         );
     }
 
     return (
-        <Card className={'p-6'}>
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                <div>
-                    <h3 className="text-lg font-semibold text-content">响应时间趋势</h3>
-                    <p className="text-xs text-content-secondary mt-1 font-mono">监控各探针的响应时间变化</p>
-                </div>
-                <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3">
+        <Card
+            title="响应时间趋势"
+            action={
+                <div className="flex flex-wrap items-center gap-3">
                     <TimeRangeSelector
                         value={timeRange}
                         onChange={setTimeRange}
@@ -581,7 +565,8 @@ const ResponseTimeChart = ({monitorId, monitorStats, available}: ResponseTimeCha
                         }}
                     />
                 </div>
-            </div>
+            }
+        >
 
             {/* 使用提示和恢复按钮 */}
             {availableAgents.length > 0 && (

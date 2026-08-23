@@ -6,7 +6,6 @@ type CardVariant = 'default' | 'muted';
 
 interface CardProps {
     title?: ReactNode;
-    description?: ReactNode;
     action?: ReactNode;
     children: ReactNode;
     className?: string;
@@ -29,7 +28,6 @@ const variantStyles: Record<CardVariant, string> = {
 
 export const Card = ({
     title,
-    description,
     action,
     children,
     className,
@@ -37,7 +35,7 @@ export const Card = ({
     padding = 'md',
     variant = 'default',
 }: CardProps) => {
-    const hasHeader = Boolean(title || description || action);
+    const hasHeader = Boolean(title || action);
 
     return (
         <div className={cn(
@@ -47,11 +45,8 @@ export const Card = ({
         )}>
             <div className={cn('relative z-10', paddingStyles[padding], className)}>
                 {hasHeader && (
-                    <div className="flex flex-col gap-3 border-b border-line pb-4 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                            {title && <h2 className="text-lg font-semibold text-content">{title}</h2>}
-                            {description && <p className="mt-1 text-xs text-content-secondary">{description}</p>}
-                        </div>
+                    <div className="flex flex-col gap-3 border-b border-line pb-3 sm:flex-row sm:items-start sm:justify-between sm:pb-4">
+                        {title && <h2 className="min-w-0 text-base font-semibold text-content sm:text-lg">{title}</h2>}
                         {action && <div className="shrink-0">{action}</div>}
                     </div>
                 )}

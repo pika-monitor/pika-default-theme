@@ -376,26 +376,15 @@ const SystemInfoSection = ({agent, latestMetrics}: SystemInfoSectionProps) => {
         <div>
             <div className="space-y-6">
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                    <Card className={'p-6'}>
-                        <h3 className="text-sm font-semibold text-content">运行环境</h3>
-                        <p className="mt-1 text-xs text-content-secondary">来自最近一次探针上报的硬件与系统信息</p>
-                        <div className="mt-4">
-                            <InfoGrid items={environmentInfo}/>
-                        </div>
+                    <Card title="运行环境">
+                        <InfoGrid items={environmentInfo}/>
                     </Card>
-                    <Card className={'p-6'}>
-                        <h3 className="text-sm font-semibold text-content">运行状态</h3>
-                        <p className="mt-1 text-xs text-content-secondary">关键时间与网络指标，帮助快速判断主机健康状况</p>
-                        <div className="mt-4">
-                            <InfoGrid items={statusInfo}/>
-                        </div>
+                    <Card title="运行状态">
+                        <InfoGrid items={statusInfo}/>
                     </Card>
                 </div>
                 {snapshotCards.length > 0 && (
-                    <Card className="p-6 space-y-4">
-                        <h3 className="text-sm font-semibold text-content">
-                            资源快照
-                        </h3>
+                    <Card title="资源快照">
                         <SnapshotGrid cards={snapshotCards}/>
                     </Card>
                 )}
@@ -414,7 +403,7 @@ const NetworkAddressSection = ({ipv4, ipv6, deviceIpInterfaces}: {
     if (!ipv4 && !ipv6 && deviceIpInterfaces.length === 0) return null;
 
     return (
-        <Card title="网络地址" description="已登录用户可见的公网 IP 及设备网卡地址信息">
+        <Card title="网络地址">
             <div className="space-y-6">
                 {(ipv4 || ipv6) && (
                     <div className="space-y-3">
@@ -473,7 +462,7 @@ const NetworkConnectionSection = ({latestMetrics}: {latestMetrics: LatestMetrics
     ];
 
     return (
-        <Card title="网络连接统计" description="TCP 连接各状态的实时统计数据">
+        <Card title="网络连接统计">
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
                 {items.map((item) => (
                     <div key={item.label} className="text-center">
@@ -490,7 +479,7 @@ const GpuMonitorSection = ({latestMetrics}: {latestMetrics: LatestMetrics | null
     if (!latestMetrics?.gpu?.length) return null;
 
     return (
-        <Card title="GPU 监控" description="显卡使用情况和温度监控">
+        <Card title="GPU 监控">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 {latestMetrics.gpu.map((gpu) => (
                     <div key={gpu.index} className="rounded-card border border-line bg-panel-muted p-4 transition-colors hover:border-line-strong">
@@ -528,7 +517,7 @@ const TemperatureMonitorSection = ({latestMetrics}: {latestMetrics: LatestMetric
     if (!latestMetrics?.temperature?.length) return null;
 
     return (
-        <Card title="温度监控" description="系统各部件温度传感器数据">
+        <Card title="温度监控">
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                 {[...latestMetrics.temperature].sort((a, b) => a.sensorKey.localeCompare(b.sensorKey)).map((temperature) => (
                     <div key={temperature.sensorKey} className="rounded-card border border-line bg-panel-muted p-4 transition-colors hover:border-line-strong">
@@ -2045,7 +2034,6 @@ const ServerDetail = () => {
                     {/* 历史趋势图表 */}
                     <Card
                         title="历史趋势"
-                        description="针对选定时间范围展示 CPU、内存与网络的变化趋势"
                         action={
                             <div className="flex flex-wrap items-center gap-2">
                                 <TimeRangeSelector

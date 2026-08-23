@@ -5,6 +5,7 @@ import {
     Activity,
     ArrowDown,
     ArrowUp,
+    Calendar,
     Clock,
     Cpu,
     Filter,
@@ -85,6 +86,9 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
     const trafficUsagePercent = traffic?.enabled && traffic.limit > 0
         ? Math.min(100, (traffic.used / traffic.limit) * 100)
         : 0;
+    const expiryNeedsAttention = server.expireTime > 0 && (
+        isExpired(server.expireTime) || isExpiringSoon(server.expireTime)
+    );
 
     return (
         <Link to={`/servers/${server.id.substring(0, 8)}`} className="block h-full">
@@ -122,21 +126,34 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
                         )}
                     </div>
 
-                    {isOnline && server.metrics?.host && (
-                        <div className="flex items-center gap-2 text-xs font-mono mt-1.5">
-                            <div className="flex items-center gap-1 text-content-muted">
-                                <Clock className="w-3 h-3"/>
-                                <span>{formatUptime(server.metrics.host.uptime)}</span>
-                            </div>
-                            <span className="h-2 w-px bg-line-strong"></span>
-                            <div className="flex items-center gap-1 text-content-muted">
-                                <Activity className="w-3 h-3"/>
-                                <span>{server.metrics.host.procs} 进程</span>
-                            </div>
+                    {((isOnline && server.metrics?.host) || server.expireTime > 0) && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-content-muted">
+                            {isOnline && server.metrics?.host && (
+                                <>
+                                    <div className="flex items-center gap-1">
+                                        <Clock className="h-3 w-3"/>
+                                        <span>{formatUptime(server.metrics.host.uptime)}</span>
+                                    </div>
+                                    <span className="h-2 w-px bg-line-strong"/>
+                                    <div className="flex items-center gap-1">
+                                        <Activity className="h-3 w-3"/>
+                                        <span>{server.metrics.host.procs} 进程</span>
+                                    </div>
+                                </>
+                            )}
+                            {server.expireTime > 0 && (
+                                <>
+                                    {isOnline && server.metrics?.host && <span className="h-2 w-px bg-line-strong"/>}
+                                    <div className={cn('flex items-center gap-1', expiryNeedsAttention && 'text-warning')}>
+                                        <Calendar className="h-3 w-3"/>
+                                        <time dateTime={new Date(server.expireTime).toISOString()}>
+                                            {new Date(server.expireTime).toLocaleDateString('zh-CN')}
+                                        </time>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     )}
-
-                    <AgentExpiryBadge expireTime={server.expireTime}/>
 
                     {/* 资源使用情况 */}
                     {isOnline ? (
@@ -163,7 +180,7 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
                                 detail={`${formatBytes(diskUsed, 0)}/${formatBytes(diskTotal, 0)}`}
                             />
                             {temperatures.length > 0 && (
-                                <div className="flex items-center gap-2 mt-1 text-xs font-mono pt-1 flex-wrap">
+                                <div className="mt-1 flex flex-wrap items-center gap-2 pb-2 pt-1 font-mono text-xs">
                                     <Thermometer className="w-3 h-3 text-warning"/>
                                     {temperatures.map((temp, index) => (
                                         <span key={index} className="flex items-center gap-1">
