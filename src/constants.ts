@@ -25,19 +25,19 @@ export const MONITOR_TIME_RANGE_OPTIONS: TimeRangeOption[] = [
 ];
 
 export const AGENT_COLORS = [
-    '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#14b8a6',
+    '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#2563eb', '#f97316', '#1d4ed8',
 ];
 
 export const INTERFACE_COLORS = [
     {upload: '#6FD598', download: '#2C70F6'},
     {upload: '#f59e0b', download: '#8b5cf6'},
-    {upload: '#ec4899', download: '#06b6d4'},
+    {upload: '#ec4899', download: '#3b82f6'},
     {upload: '#10b981', download: '#f97316'},
-    {upload: '#14b8a6', download: '#2563eb'},
+    {upload: '#6366f1', download: '#2563eb'},
 ];
 
 export const TEMPERATURE_COLORS: Record<string, string> = {
-    'CPU': '#f97316', 'GPU': '#8b5cf6', 'DISK': '#06b6d4', 'BATTERY': '#10b981',
+    'CPU': '#f97316', 'GPU': '#8b5cf6', 'DISK': '#3b82f6', 'BATTERY': '#10b981',
     'CHIPSET': '#f59e0b', 'SYSTEM': '#6366f1', 'PSU': '#ec4899',
 };
 

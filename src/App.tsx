@@ -12,7 +12,7 @@ export default function PortalApp() {
     return (
         <ColorModeProvider>
             <BrowserRouter>
-                <Suspense fallback={<div className="flex h-[75vh] items-center justify-center text-gray-500 dark:text-cyan-300">页面加载中...</div>}>
+                <Suspense fallback={<div className="flex h-[75vh] items-center justify-center text-content-secondary">页面加载中...</div>}>
                     <Routes>
                         <Route element={<PublicLayout/>}>
                             <Route path="/" element={<ServerList/>}/>

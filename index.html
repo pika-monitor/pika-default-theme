@@ -6,6 +6,23 @@
     <link rel="icon" href="/api/logo"/>
     <title>Pika Monitor</title>
     <!-- pika:head -->
+    <script>
+        (() => {
+            try {
+                const saved = localStorage.getItem('colorMode') || localStorage.getItem('theme');
+                const persisted = saved === 'auto'
+                    ? 'system'
+                    : (saved === 'light' || saved === 'dark' || saved === 'system' ? saved : null);
+                const configured = window.PikaRuntime?.system?.defaultColorMode;
+                const mode = persisted || (configured === 'light' || configured === 'dark' || configured === 'system' ? configured : 'system');
+                const dark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                document.documentElement.classList.toggle('dark', dark);
+                document.documentElement.dataset.colorMode = dark ? 'dark' : 'light';
+            } catch {
+                // A theme preference must never prevent the public status page from rendering.
+            }
+        })();
+    </script>
 </head>
 <body>
 <div id="root"></div>

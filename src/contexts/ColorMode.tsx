@@ -1,4 +1,4 @@
-import {createContext, useContext, useEffect, useState, type ReactNode} from 'react';
+import {createContext, useContext, useLayoutEffect, useState, type ReactNode} from 'react';
 import {getRuntimeConfig, resolveColorMode} from '../api';
 import type {ColorMode} from '../types';
 
@@ -19,7 +19,7 @@ export const ColorModeProvider = ({children}: {children: ReactNode}) => {
         if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
         return getRuntimeConfig().system.defaultColorMode;
     });
-    const [resolvedColorMode, setResolvedColorMode] = useState<ResolvedColorMode>('dark');
+    const [resolvedColorMode, setResolvedColorMode] = useState<ResolvedColorMode>(() => resolveColorMode(colorMode));
 
     const setColorMode = (mode: ColorMode) => {
         setColorModeState(mode);
@@ -27,7 +27,7 @@ export const ColorModeProvider = ({children}: {children: ReactNode}) => {
         localStorage.removeItem('theme');
     };
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         const apply = () => {
             const resolved = resolveColorMode(colorMode);
             setResolvedColorMode(resolved);

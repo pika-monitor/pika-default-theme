@@ -2,7 +2,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {useNavigate, useParams} from 'react-router-dom';
 import {useQuery} from '@tanstack/react-query';
 import {Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts';
-import {AlertCircle, ArrowLeft, ChevronDown, ChevronUp, Clock, Globe, MapPin, RotateCcw, Server, ShieldCheck, Wifi} from 'lucide-react';
+import {AlertCircle, ArrowLeft, ChevronDown, ChevronUp, Clock, MapPin, RotateCcw, ShieldCheck} from 'lucide-react';
 import {pika} from '../api';
 import type {AgentMonitorStat, MetricsResponse, PublicMonitor} from '../types';
 import {AGENT_COLORS, MONITOR_TIME_RANGE_OPTIONS} from '../constants';
@@ -10,6 +10,7 @@ import {cn, formatChartTime, formatDateTime, formatTime} from '../lib/utils';
 import {useIsMobile} from '../hooks';
 import {
     Card,
+    CertificateBadge,
     ChartPlaceholder,
     CustomTooltip,
     EmptyState,
@@ -17,47 +18,8 @@ import {
     MetricItem,
     StatusBadge,
     TimeRangeSelector
-} from '../components';
-
-/* ========================================== TypeIcon ========================================== */
-
-const TypeIcon = ({type}: {type: string}) => {
-    switch (type.toLowerCase()) {
-        case 'https':
-            return <ShieldCheck className="w-4 h-4 text-purple-500 dark:text-purple-400"/>;
-        case 'http':
-            return <Globe className="w-4 h-4 text-blue-500 dark:text-blue-400"/>;
-        case 'tcp':
-            return <Server className="w-4 h-4 text-orange-500 dark:text-orange-400"/>;
-        case 'icmp':
-        case 'ping':
-            return <Wifi className="w-4 h-4 text-cyan-500 dark:text-cyan-500"/>;
-        default:
-            return <Server className="w-4 h-4 text-slate-500 dark:text-slate-400"/>;
-    }
-};
-
-/* ========================================== CertBadge ========================================== */
-
-const CertBadge = ({expiryTime, daysLeft}: {expiryTime: number; daysLeft: number}) => {
-    if (!expiryTime || daysLeft === undefined) return null;
-
-    const isExpired = daysLeft < 0;
-    let colorClass = "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20";
-
-    if (isExpired) {
-        colorClass = "text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20";
-    } else if (daysLeft < 30) {
-        colorClass = "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20";
-    }
-
-    return (
-        <div className={cn("flex items-center gap-1.5 px-2 py-1 rounded text-xs border", colorClass)}>
-            <ShieldCheck className="w-3 h-3"/>
-            <span>{isExpired ? "已过期" : `${daysLeft} 天后过期`}</span>
-        </div>
-    );
-};
+} from '../components/index';
+import {getPublicMonitorTarget, isMonitorAvailable} from '../domain/monitors/monitor-view-model';
 
 /* ========================================== MonitorHero ========================================== */
 
@@ -67,33 +29,30 @@ interface MonitorHeroProps {
 }
 
 const MonitorHero = ({monitor, onBack}: MonitorHeroProps) => {
+    const isAvailable = isMonitorAvailable(monitor);
+
     return (
-        <Card className={'p-6 space-y-6'}>
+        <Card className="p-6">
             {/* 返回按钮 */}
             <button
                 type="button"
                 onClick={onBack}
-                className="group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-cyan-500 hover:text-gray-800 dark:hover:text-cyan-400 transition font-mono"
+                className="group inline-flex items-center gap-2 text-sm font-medium text-content-secondary transition hover:text-brand"
             >
-                <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1"/>
-                返回监控列表
+                <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5"/>
+                返回概览
             </button>
 
             {/* 监控信息 */}
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex items-start gap-4 flex-1 min-w-0">
-                    <div className="p-3 bg-gray-100 dark:bg-cyan-950/30 border border-slate-200 dark:border-cyan-500/20 rounded-lg flex-shrink-0">
-                        <TypeIcon type={monitor.type}/>
+            <div className="mt-4 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0 flex-1">
+                    <div className="mb-2 flex flex-wrap items-center gap-3">
+                        <h1 className="truncate text-2xl font-bold tracking-wide text-content sm:text-3xl">{monitor.name}</h1>
+                        <StatusBadge status={monitor.status}/>
                     </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-3 mb-2">
-                            <h1 className="text-2xl sm:text-3xl font-bold truncate text-slate-800 dark:text-cyan-100 tracking-wide">{monitor.name}</h1>
-                            <StatusBadge status={monitor.status}/>
-                        </div>
-                        <p className="text-sm text-gray-600 dark:text-cyan-500/80 font-mono truncate">
-                            {monitor.showTargetPublic ? monitor.target : '******'}
-                        </p>
-                    </div>
+                    <p className="truncate font-mono text-sm text-content-secondary/80">
+                        {getPublicMonitorTarget(monitor)}
+                    </p>
                 </div>
 
                 {/* 统计卡片 */}
@@ -108,25 +67,25 @@ const MonitorHero = ({monitor, onBack}: MonitorHeroProps) => {
                     />
                     <MetricItem
                         label="平均响应"
-                        value={`${monitor.responseTime}ms`}
+                        value={isAvailable ? `${monitor.responseTime}ms` : '—'}
                     />
                     <MetricItem
                         label="最慢响应"
-                        value={`${monitor.responseTimeMax}ms`}
+                        value={isAvailable ? `${monitor.responseTimeMax}ms` : '—'}
                     />
                 </div>
             </div>
 
             {/* 证书信息（如果存在证书数据）*/}
             {monitor.certExpiryTime > 0 && (
-                <div className="flex flex-col gap-3 pt-4 border-t border-slate-200 dark:border-cyan-900/50">
-                    <span className="text-xs text-gray-600 dark:text-cyan-500 font-mono">SSL 证书:</span>
+                <div className="mt-6 flex flex-col gap-3 border-t border-line pt-4">
+                    <span className="text-xs text-content-secondary font-mono">SSL 证书:</span>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-                        <CertBadge
+                        <CertificateBadge
                             expiryTime={monitor.certExpiryTime}
                             daysLeft={monitor.certDaysLeft}
                         />
-                        <span className="text-xs text-gray-500 dark:text-cyan-600 font-mono break-all sm:break-normal">
+                        <span className="text-xs text-content-muted font-mono break-all sm:break-normal">
                             到期时间: {formatDateTime(monitor.certExpiryTime)}
                         </span>
                     </div>
@@ -146,7 +105,7 @@ interface AgentStatsTableProps {
 const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
     if (monitorStats.length === 0) {
         return (
-            <div className="text-center py-12 text-gray-600 dark:text-cyan-500">
+            <div className="text-center py-12 text-content-secondary">
                 <p className="text-sm font-mono">暂无探针数据</p>
             </div>
         );
@@ -155,8 +114,8 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
     return (
         <Card className="p-4 sm:p-6">
             <div className="mb-4 sm:mb-6">
-                <h3 className="text-base sm:text-lg font-bold tracking-wide text-slate-800 dark:text-cyan-100 uppercase">探针监控详情</h3>
-                <p className="text-xs text-gray-600 dark:text-cyan-500 mt-1 font-mono">各探针的当前状态和统计数据</p>
+                <h3 className="text-base font-semibold text-content sm:text-lg">探针监控详情</h3>
+                <p className="text-xs text-content-secondary mt-1 font-mono">各探针的当前状态和统计数据</p>
             </div>
 
             {/* 移动端卡片布局 */}
@@ -166,7 +125,7 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
                     return (
                         <div
                             key={stat.agentId}
-                            className="p-4 bg-slate-50 dark:bg-cyan-950/20 border border-slate-200 dark:border-cyan-900/50 rounded-lg space-y-3"
+                            className="space-y-3 rounded-card border border-line bg-panel-muted p-4"
                         >
                             {/* 探针名称和状态 */}
                             <div className="flex items-center justify-between gap-3">
@@ -175,8 +134,8 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
                                         className="inline-block h-2 w-2 rounded-full flex-shrink-0"
                                         style={{backgroundColor: color}}
                                     />
-                                    <MapPin className="h-3.5 w-3.5 text-gray-600 dark:text-cyan-500 flex-shrink-0"/>
-                                    <span className="font-mono text-sm text-slate-800 dark:text-cyan-200 truncate">
+                                    <MapPin className="h-3.5 w-3.5 text-content-secondary flex-shrink-0"/>
+                                    <span className="font-mono text-sm text-content truncate">
                                         {stat.agentName || stat.agentId.substring(0, 8)}
                                     </span>
                                 </div>
@@ -186,23 +145,23 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
                             {/* 响应时间和最后检测 */}
                             <div className="flex items-center justify-between gap-4 text-sm">
                                 <div className="flex items-center gap-2">
-                                    <Clock className="h-4 w-4 text-gray-600 dark:text-cyan-500"/>
-                                    <span className="font-semibold text-slate-800 dark:text-cyan-100 font-mono">
-                                        {formatTime(stat.responseTime)}
+                                    <Clock className="h-4 w-4 text-content-secondary"/>
+                                    <span className="font-semibold text-content font-mono">
+                                        {stat.status === 'up' ? formatTime(stat.responseTime) : '—'}
                                     </span>
                                 </div>
-                                <span className="text-xs text-gray-600 dark:text-cyan-500 font-mono">
+                                <span className="text-xs text-content-secondary font-mono">
                                     {formatDateTime(stat.checkedAt)}
                                 </span>
                             </div>
 
                             {/* 证书信息 */}
                             {monitorType === 'https' && stat.certExpiryTime && (
-                                <div className="pt-2 border-t border-slate-200 dark:border-cyan-900/30">
+                                <div className="pt-2 border-t border-line">
                                     <div className="flex items-center gap-2">
                                         <span
-                                            className="text-xs text-gray-600 dark:text-cyan-500 font-mono">证书:</span>
-                                        <CertBadge
+                                            className="text-xs text-content-secondary font-mono">证书:</span>
+                                        <CertificateBadge
                                             expiryTime={stat.certExpiryTime}
                                             daysLeft={stat.certDaysLeft}
                                         />
@@ -212,10 +171,10 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
 
                             {/* 错误信息 */}
                             {stat.status === 'down' && stat.message && (
-                                <div className="pt-2 border-t border-slate-200 dark:border-cyan-900/30">
+                                <div className="pt-2 border-t border-line">
                                     <div className="flex items-start gap-2">
-                                        <AlertCircle className="h-4 w-4 text-rose-400 flex-shrink-0 mt-0.5"/>
-                                        <span className="text-xs text-rose-300 break-words font-mono">
+                                        <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-danger"/>
+                                        <span className="break-words font-mono text-xs text-danger">
                                             {stat.message}
                                         </span>
                                     </div>
@@ -230,35 +189,35 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
             <div className="hidden lg:block overflow-x-auto -mx-6 px-6">
                 <table className="min-w-full">
                     <thead>
-                    <tr className="border-b border-slate-200 dark:border-cyan-900/50">
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-gray-600 dark:text-cyan-500 font-mono">
+                    <tr className="border-b border-line">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-content-secondary">
                             探针名称
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-gray-600 dark:text-cyan-500 font-mono">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-content-secondary">
                             状态
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-gray-600 dark:text-cyan-500 font-mono">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-content-secondary">
                             响应时间
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-gray-600 dark:text-cyan-500 font-mono">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-content-secondary">
                             最后检测
                         </th>
                         {monitorType === 'https' && (
-                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-gray-600 dark:text-cyan-500 font-mono hidden xl:table-cell">
+                            <th className="hidden px-4 py-3 text-left text-xs font-semibold text-content-secondary xl:table-cell">
                                 证书信息
                             </th>
                         )}
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-gray-600 dark:text-cyan-500 font-mono hidden xl:table-cell">
+                        <th className="hidden px-4 py-3 text-left text-xs font-semibold text-content-secondary xl:table-cell">
                             错误信息
                         </th>
                     </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-200 dark:divide-cyan-900/30">
+                    <tbody className="divide-y divide-line">
                     {monitorStats.map((stat, index) => {
                         const color = AGENT_COLORS[index % AGENT_COLORS.length];
                         return (
                             <tr key={stat.agentId}
-                                className="hover:bg-slate-100 dark:hover:bg-cyan-950/20 transition-colors">
+                                className="transition-colors hover:bg-panel-hover">
                                 <td className="px-4 py-4">
                                     <div className="flex items-center gap-3">
                                             <span
@@ -266,8 +225,8 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
                                                 style={{backgroundColor: color}}
                                             />
                                         <div className="flex items-center gap-2">
-                                            <MapPin className="h-3.5 w-3.5 text-gray-600 dark:text-cyan-500"/>
-                                            <span className="font-mono text-sm text-slate-800 dark:text-cyan-200">
+                                            <MapPin className="h-3.5 w-3.5 text-content-secondary"/>
+                                            <span className="font-mono text-sm text-content">
                                                     {stat.agentName || stat.agentId.substring(0, 8)}
                                                 </span>
                                         </div>
@@ -278,25 +237,25 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
                                 </td>
                                 <td className="px-4 py-4">
                                     <div className="flex items-center gap-2">
-                                        <Clock className="h-4 w-4 text-gray-600 dark:text-cyan-500"/>
+                                        <Clock className="h-4 w-4 text-content-secondary"/>
                                         <span
-                                            className="text-sm font-semibold text-slate-800 dark:text-cyan-100 font-mono">
-                                                {formatTime(stat.responseTime)}
+                                            className="text-sm font-semibold text-content font-mono">
+                                                {stat.status === 'up' ? formatTime(stat.responseTime) : '—'}
                                             </span>
                                     </div>
                                 </td>
-                                <td className="px-4 py-4 text-sm text-gray-600 dark:text-cyan-500 font-mono">
+                                <td className="px-4 py-4 text-sm text-content-secondary font-mono">
                                     {formatDateTime(stat.checkedAt)}
                                 </td>
                                 {monitorType === 'https' && (
                                     <td className="px-4 py-4 hidden xl:table-cell">
                                         {stat.certExpiryTime ? (
-                                            <CertBadge
+                                            <CertificateBadge
                                                 expiryTime={stat.certExpiryTime}
                                                 daysLeft={stat.certDaysLeft}
                                             />
                                         ) : (
-                                            <span className="text-xs text-gray-600 dark:text-cyan-500">-</span>
+                                            <span className="text-xs text-content-secondary">-</span>
                                         )}
                                     </td>
                                 )}
@@ -304,14 +263,14 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
                                     {stat.status === 'down' && stat.message ? (
                                         <div className="flex items-start gap-2 max-w-xs">
                                             <AlertCircle
-                                                className="h-4 w-4 text-rose-400 flex-shrink-0 mt-0.5"/>
+                                                className="mt-0.5 h-4 w-4 flex-shrink-0 text-danger"/>
                                             <span
-                                                className="text-xs text-rose-300 break-words line-clamp-2 font-mono">
+                                                className="line-clamp-2 break-words font-mono text-xs text-danger">
                                                     {stat.message}
                                                 </span>
                                         </div>
                                     ) : (
-                                        <span className="text-xs text-gray-600 dark:text-cyan-500">-</span>
+                                        <span className="text-xs text-content-secondary">-</span>
                                     )}
                                 </td>
                             </tr>
@@ -354,14 +313,14 @@ const getMaxDataPoints = (timeRange: string): number => {
 const generateColors = (count: number): string[] => {
     const colors: string[] = [];
     const hueStep = 360 / count;
-    
+
     for (let i = 0; i < count; i++) {
         const hue = (i * hueStep) % 360;
         const saturation = 65 + (i % 3) * 10;
         const lightness = 45 + (i % 2) * 10;
         colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
     }
-    
+
     return colors;
 };
 
@@ -394,14 +353,14 @@ const CustomLegend = ({onClick, selectedAgents, allAgents, colors, collapsed}: a
                                 y1="6"
                                 x2="32"
                                 y2="6"
-                                stroke={isSelected ? color : '#9ca3af'}
+                                stroke={isSelected ? color : 'var(--theme-content-muted)'}
                                 strokeWidth="2"
                             />
                         </svg>
                         <span
                             className="text-xs font-medium"
                             style={{
-                                color: isSelected ? color : '#9ca3af',
+                                color: isSelected ? color : 'var(--theme-content-muted)',
                             }}
                         >
                             {agent.name}
@@ -416,9 +375,10 @@ const CustomLegend = ({onClick, selectedAgents, allAgents, colors, collapsed}: a
 interface ResponseTimeChartProps {
     monitorId: string;
     monitorStats: AgentMonitorStat[];
+    available: boolean;
 }
 
-const ResponseTimeChart = ({monitorId, monitorStats}: ResponseTimeChartProps) => {
+const ResponseTimeChart = ({monitorId, monitorStats, available}: ResponseTimeChartProps) => {
     const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
     const [timeRange, setTimeRange] = useState<string>('12h');
     const [customRange, setCustomRange] = useState<{start: number; end: number} | null>(null);
@@ -440,7 +400,7 @@ const ResponseTimeChart = ({monitorId, monitorStats}: ResponseTimeChartProps) =>
             });
         },
         refetchInterval: 30000,
-        enabled: !!monitorId,
+        enabled: !!monitorId && available,
     });
 
     // 获取所有可用的探针列表
@@ -571,12 +531,27 @@ const ResponseTimeChart = ({monitorId, monitorStats}: ResponseTimeChartProps) =>
         });
     }, [historyData, selectedAgents, timeRange, customStart, customEnd]);
 
+    if (!available) {
+        return (
+            <Card className="p-6">
+                <div>
+                    <h3 className="text-lg font-semibold text-content">响应时间趋势</h3>
+                    <p className="mt-1 font-mono text-xs text-content-secondary">监控各探针的响应时间变化</p>
+                </div>
+                <div className="mt-6 flex items-center gap-2 border-t border-line pt-4 font-mono text-xs text-danger">
+                    <AlertCircle className="h-4 w-4 shrink-0"/>
+                    <span>服务当前不可用，已隐藏可能过期的响应时间与趋势数据。</span>
+                </div>
+            </Card>
+        );
+    }
+
     return (
         <Card className={'p-6'}>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <div>
-                    <h3 className="text-lg font-bold tracking-wide text-slate-800 dark:text-cyan-100 uppercase">响应时间趋势</h3>
-                    <p className="text-xs text-gray-600 dark:text-cyan-500 mt-1 font-mono">监控各探针的响应时间变化</p>
+                    <h3 className="text-lg font-semibold text-content">响应时间趋势</h3>
+                    <p className="text-xs text-content-secondary mt-1 font-mono">监控各探针的响应时间变化</p>
                 </div>
                 <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3">
                     <TimeRangeSelector
@@ -595,16 +570,16 @@ const ResponseTimeChart = ({monitorId, monitorStats}: ResponseTimeChartProps) =>
             {/* 使用提示和恢复按钮 */}
             {availableAgents.length > 0 && (
                 <div className="mb-3 flex items-center justify-between">
-                    <div className="text-xs text-gray-500 dark:text-cyan-600">
+                    <div className="text-xs text-content-muted">
                         💡 点击图表线条或图例切换显示
                     </div>
                     {hasUnselected && (
                         <button
                             onClick={handleSelectAll}
                             className="p-1.5 rounded
-                                text-gray-500 dark:text-cyan-500 
-                                hover:text-gray-700 dark:hover:text-cyan-400
-                                hover:bg-gray-100 dark:hover:bg-cyan-900/30
+                                text-content-muted
+                                hover:text-brand
+                                hover:bg-panel-hover
                                 transition-colors"
                             title="恢复全选"
                         >
@@ -633,7 +608,7 @@ const ResponseTimeChart = ({monitorId, monitorStats}: ResponseTimeChartProps) =>
                             </defs>
                             <CartesianGrid
                                 strokeDasharray="3 3"
-                                className="stroke-slate-200 dark:stroke-cyan-900/30"
+                                className="stroke-line"
                                 vertical={false}
                             />
                             <XAxis
@@ -642,7 +617,7 @@ const ResponseTimeChart = ({monitorId, monitorStats}: ResponseTimeChartProps) =>
                                 scale="time"
                                 domain={['dataMin', 'dataMax']}
                                 tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
-                                className="text-xs text-gray-600 dark:text-cyan-500 font-mono"
+                                className="text-xs text-content-secondary font-mono"
                                 stroke="currentColor"
                                 tickLine={false}
                                 axisLine={false}
@@ -650,7 +625,7 @@ const ResponseTimeChart = ({monitorId, monitorStats}: ResponseTimeChartProps) =>
                                 textAnchor="end"
                             />
                             <YAxis
-                                className="text-xs text-gray-600 dark:text-cyan-500 font-mono"
+                                className="text-xs text-content-secondary font-mono"
                                 stroke="currentColor"
                                 tickLine={false}
                                 axisLine={false}
@@ -699,7 +674,7 @@ const ResponseTimeChart = ({monitorId, monitorStats}: ResponseTimeChartProps) =>
                         <div className="pt-4">
                             <button
                                 onClick={toggleLegend}
-                                className="w-full flex items-center justify-center gap-2 py-2 text-xs text-gray-600 dark:text-cyan-400 hover:text-gray-900 dark:hover:text-cyan-300"
+                                className="w-full flex items-center justify-center gap-2 py-2 text-xs text-content-secondary hover:text-brand"
                             >
                                 <span>{legendCollapsed ? '显示图例' : '收起图例'}</span>
                                 {legendCollapsed ? <ChevronDown size={16}/> : <ChevronUp size={16}/>}
@@ -765,7 +740,7 @@ const MonitorDetail = () => {
     }
 
     return (
-        <div className="bg-[#f0f2f5] dark:bg-[#05050a] min-h-screen">
+        <div className="bg-page min-h-screen">
             <div className="mx-auto flex max-w-7xl flex-col px-4 pb-10 pt-4 sm:pt-6 sm:px-6 lg:px-8">
                 {/* 头部区域 */}
                 <MonitorHero
@@ -779,6 +754,7 @@ const MonitorDetail = () => {
                     <ResponseTimeChart
                         monitorId={id!}
                         monitorStats={monitorStats}
+                        available={isMonitorAvailable(monitorDetail)}
                     />
 
                     {/* 各探针详细数据 */}

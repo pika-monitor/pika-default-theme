@@ -41,6 +41,8 @@ import {
     useNetworkInterfacesQuery,
 } from '../hooks';
 import {
+    AgentExpiryBadge,
+    AgentOfflineState,
     Card,
     ChartPlaceholder,
     CustomTooltip,
@@ -49,7 +51,8 @@ import {
     MetricItem,
     StatusBadge,
     TimeRangeSelector
-} from '../components';
+} from '../components/index';
+import {isAgentOnline} from '../domain/agents/agent-view-model';
 
 /* ========================================== 共享工具 ========================================== */
 
@@ -68,8 +71,8 @@ const ChartContainer = ({title, icon: Icon, children, action}: ChartContainerPro
     return (
         <section>
             <div className="mb-3 flex items-center justify-between">
-                <h3 className="flex items-center gap-2 text-xs font-bold font-mono uppercase tracking-widest text-gray-700 dark:text-cyan-500">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-200 dark:bg-cyan-500/10 text-gray-700 dark:text-cyan-500">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-content-secondary">
+          <span className="flex h-8 w-8 items-center justify-center rounded-control bg-brand-muted text-brand">
             <Icon className="h-4 w-4"/>
           </span>
                     {title}
@@ -91,9 +94,7 @@ interface ServerHeroProps {
 
 const ServerHero = ({agent, latestMetrics, onBack}: ServerHeroProps) => {
     const displayName = agent?.name?.trim() ? agent.name : '未命名探针';
-    const isOnline = agent?.status === 1;
-    const statusDotStyles = isOnline ? 'bg-emerald-500' : 'bg-rose-500';
-    const statusText = isOnline ? '在线' : '离线';
+    const isOnline = isAgentOnline(agent);
 
     const platformDisplay = latestMetrics?.host?.platform
         ? `${latestMetrics.host.platform} ${latestMetrics.host.platformVersion || ''}`.trim()
@@ -123,7 +124,7 @@ const ServerHero = ({agent, latestMetrics, onBack}: ServerHeroProps) => {
                         <button
                             type="button"
                             onClick={onBack}
-                            className="group inline-flex items-center gap-2 text-xs font-bold font-mono uppercase tracking-[0.3em] dark:text-cyan-500 transition dark:hover:text-cyan-500"
+                            className="group inline-flex items-center gap-2 text-sm font-medium text-content-secondary transition hover:text-brand"
                         >
                             <ArrowLeft className="h-4 w-4 transition group-hover:-translate-x-0.5"/>
                             返回概览
@@ -131,12 +132,18 @@ const ServerHero = ({agent, latestMetrics, onBack}: ServerHeroProps) => {
                         <div className="flex items-start gap-4">
                             <div>
                                 <div className="flex flex-wrap items-center gap-3">
-                                    <h1 className="text-3xl font-bold dark:text-cyan-100">{displayName}</h1>
-                                    <StatusBadge status={agent.status === 1 ? 'up' : 'down'}/>
+                                    <h1 className="text-3xl font-bold text-content">{displayName}</h1>
+                                    {isOnline && <StatusBadge status="healthy"/>}
                                 </div>
-                                <p className="mt-2 text-sm dark:text-cyan-500 font-mono">
+                                <p className="mt-2 text-sm text-content-secondary font-mono">
                                     {[agent.hostname].filter(Boolean).join(' · ') || '-'}
                                 </p>
+                                {(!isOnline || agent.expireTime > 0) && (
+                                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                                        {!isOnline && <AgentOfflineState/>}
+                                        <AgentExpiryBadge expireTime={agent.expireTime}/>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -148,11 +155,11 @@ const ServerHero = ({agent, latestMetrics, onBack}: ServerHeroProps) => {
                     </div>
                 </div>
                 <div
-                    className="flex flex-wrap items-center gap-3 text-xs dark:text-cyan-500 font-mono pt-4 border-t border-cyan-900/30">
+                    className="flex flex-wrap items-center gap-3 border-t border-line pt-4 font-mono text-xs text-content-secondary">
                     <span>探针 ID：{agent.id}</span>
-                    <span className="hidden h-1 w-1 rounded-full bg-cyan-900 sm:inline-block"/>
+                    <span className="hidden h-1 w-1 rounded-full bg-line-strong sm:inline-block"/>
                     <span>版本：{agent.version || '-'}</span>
-                    <span className="hidden h-1 w-1 rounded-full bg-cyan-900 sm:inline-block"/>
+                    <span className="hidden h-1 w-1 rounded-full bg-line-strong sm:inline-block"/>
                     <span>网络累计：{networkSummary}</span>
                 </div>
             </div>
@@ -171,8 +178,8 @@ const InfoGrid = ({items}: {items: Array<{label: string; value: ReactNode}>}) =>
     <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
         {items.map((item) => (
             <div key={item.label}>
-                <dt className="text-xs font-mono uppercase tracking-widest text-gray-600 dark:text-cyan-500">{item.label}</dt>
-                <dd className="mt-1 font-medium text-slate-800 dark:text-cyan-100">{item.value}</dd>
+                <dt className="text-xs font-medium text-content-secondary">{item.label}</dt>
+                <dd className="mt-1 font-medium text-content">{item.value}</dd>
             </div>
         ))}
     </dl>
@@ -188,10 +195,10 @@ type SnapshotCardData = {
 };
 
 const snapshotColors = {
-    blue: 'text-blue-400',
-    emerald: 'text-emerald-400',
-    purple: 'text-purple-400',
-    amber: 'text-amber-400',
+    blue: 'text-chart-1',
+    emerald: 'text-chart-2',
+    purple: 'text-chart-4',
+    amber: 'text-warning',
 };
 
 const SnapshotGrid = ({cards}: {cards: SnapshotCardData[]}) => (
@@ -199,22 +206,22 @@ const SnapshotGrid = ({cards}: {cards: SnapshotCardData[]}) => (
         {cards.map((card) => (
             <div
                 key={card.key}
-                className="rounded-xl border border-slate-200 dark:border-cyan-900/50 bg-slate-50 dark:bg-black/40 p-4 transition hover:border-slate-300 dark:hover:border-cyan-700/50"
+                className="rounded-card border border-line bg-panel-muted p-4 transition-colors hover:border-line-strong"
             >
                 <div className="mb-3 flex items-start justify-between">
                     <div className="flex items-center gap-2">
-                        <span className={cn('flex h-9 w-9 items-center justify-center rounded-lg bg-gray-200 dark:bg-cyan-500/10', snapshotColors[card.accent])}>
+                        <span className={cn('flex h-9 w-9 items-center justify-center rounded-control bg-brand-muted', snapshotColors[card.accent])}>
                             <card.icon className="h-4 w-4"/>
                         </span>
-                        <p className="text-xs font-bold font-mono uppercase tracking-wider text-gray-700 dark:text-cyan-300">{card.title}</p>
+                        <p className="text-xs font-medium text-content-secondary">{card.title}</p>
                     </div>
                     <span className={cn('text-xl font-bold', snapshotColors[card.accent])}>{card.usagePercent}</span>
                 </div>
                 <div className="space-y-2">
                     {card.metrics.map((metric) => (
                         <div key={metric.label} className="flex items-center justify-between text-xs">
-                            <span className="text-gray-600 dark:text-cyan-500 font-mono uppercase tracking-wider">{metric.label}</span>
-                            <span className="ml-2 text-right font-medium text-slate-700 dark:text-cyan-200">{metric.value}</span>
+                            <span className="text-content-secondary">{metric.label}</span>
+                            <span className="ml-2 text-right font-medium text-content">{metric.value}</span>
                         </div>
                     ))}
                 </div>
@@ -361,15 +368,15 @@ const SystemInfoSection = ({agent, latestMetrics}: SystemInfoSectionProps) => {
             <div className="space-y-6">
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                     <Card className={'p-6'}>
-                        <h3 className="text-sm font-bold font-mono uppercase tracking-widest text-gray-700 dark:text-cyan-500">运行环境</h3>
-                        <p className="mt-1 text-xs text-gray-600 dark:text-cyan-500">来自最近一次探针上报的硬件与系统信息</p>
+                        <h3 className="text-sm font-semibold text-content">运行环境</h3>
+                        <p className="mt-1 text-xs text-content-secondary">来自最近一次探针上报的硬件与系统信息</p>
                         <div className="mt-4">
                             <InfoGrid items={environmentInfo}/>
                         </div>
                     </Card>
                     <Card className={'p-6'}>
-                        <h3 className="text-sm font-bold font-mono uppercase tracking-widest text-gray-700 dark:text-cyan-500">运行状态</h3>
-                        <p className="mt-1 text-xs text-gray-600 dark:text-cyan-500">关键时间与网络指标，帮助快速判断主机健康状况</p>
+                        <h3 className="text-sm font-semibold text-content">运行状态</h3>
+                        <p className="mt-1 text-xs text-content-secondary">关键时间与网络指标，帮助快速判断主机健康状况</p>
                         <div className="mt-4">
                             <InfoGrid items={statusInfo}/>
                         </div>
@@ -377,7 +384,7 @@ const SystemInfoSection = ({agent, latestMetrics}: SystemInfoSectionProps) => {
                 </div>
                 {snapshotCards.length > 0 && (
                     <Card className="p-6 space-y-4">
-                        <h3 className="text-sm font-bold font-mono uppercase tracking-widest text-gray-600 dark:text-cyan-500">
+                        <h3 className="text-sm font-semibold text-content">
                             资源快照
                         </h3>
                         <SnapshotGrid cards={snapshotCards}/>
@@ -402,30 +409,30 @@ const NetworkAddressSection = ({ipv4, ipv6, deviceIpInterfaces}: {
             <div className="space-y-6">
                 {(ipv4 || ipv6) && (
                     <div className="space-y-3">
-                        <div className="text-sm font-medium text-slate-700 dark:text-slate-300">公网地址</div>
+                        <div className="text-sm font-medium text-content-secondary">公网地址</div>
                         <div className="grid gap-4 sm:grid-cols-2">
                             {[["IPv4", ipv4], ["IPv6", ipv6]].map(([label, value]) => (
                                 <div key={label} className="space-y-2">
-                                    <div className="text-xs font-medium text-slate-600 dark:text-slate-400">{label}</div>
-                                    <div className="font-mono text-sm text-slate-900 dark:text-slate-100">{value || '-'}</div>
+                                    <div className="text-xs font-medium text-content-secondary">{label}</div>
+                                    <div className="font-mono text-sm text-content">{value || '-'}</div>
                                 </div>
                             ))}
                         </div>
                     </div>
                 )}
 
-                {(ipv4 || ipv6) && deviceIpInterfaces.length > 0 && <div className="border-t border-slate-200 dark:border-slate-700"/>}
+                {(ipv4 || ipv6) && deviceIpInterfaces.length > 0 && <div className="border-t border-line"/>}
 
                 {deviceIpInterfaces.length > 0 && (
                     <div className="space-y-3">
-                        <div className="text-sm font-medium text-slate-700 dark:text-slate-300">网卡地址</div>
+                        <div className="text-sm font-medium text-content-secondary">网卡地址</div>
                         <div className="space-y-4">
                             {deviceIpInterfaces.map((networkInterface) => (
                                 <div key={networkInterface.name} className="space-y-2">
-                                    <div className="text-xs font-medium text-slate-600 dark:text-slate-400">{networkInterface.name}</div>
+                                    <div className="text-xs font-medium text-content-secondary">{networkInterface.name}</div>
                                     <div className="flex flex-wrap gap-2">
                                         {networkInterface.addrs.map((address) => (
-                                            <span key={address} className="rounded-sm border border-slate-200 bg-white/70 px-2 py-0.5 text-xs font-mono text-slate-600 dark:border-cyan-900/40 dark:bg-cyan-950/40 dark:text-cyan-200">
+                                            <span key={address} className="rounded-sm border border-line bg-panel-muted px-2 py-0.5 text-xs font-mono text-content">
                                                 {address}
                                             </span>
                                         ))}
@@ -444,15 +451,15 @@ const NetworkConnectionSection = ({latestMetrics}: {latestMetrics: LatestMetrics
     const metrics = latestMetrics?.networkConnection;
     if (!metrics) return null;
     const items = [
-        {label: 'Total', value: metrics.total, color: 'text-slate-800 dark:text-cyan-100'},
-        {label: 'ESTABLISHED', value: metrics.established, color: 'text-emerald-600 dark:text-emerald-400'},
-        {label: 'TIME_WAIT', value: metrics.timeWait, color: 'text-amber-600 dark:text-amber-400'},
-        {label: 'LISTEN', value: metrics.listen, color: 'text-blue-600 dark:text-blue-400'},
-        {label: 'CLOSE_WAIT', value: metrics.closeWait, color: 'text-rose-600 dark:text-rose-400'},
+        {label: 'Total', value: metrics.total, color: 'text-content'},
+        {label: 'ESTABLISHED', value: metrics.established, color: 'text-success'},
+        {label: 'TIME_WAIT', value: metrics.timeWait, color: 'text-warning'},
+        {label: 'LISTEN', value: metrics.listen, color: 'text-brand'},
+        {label: 'CLOSE_WAIT', value: metrics.closeWait, color: 'text-danger'},
         {
             label: 'OTHER',
             value: metrics.synSent + metrics.synRecv + metrics.finWait1 + metrics.finWait2 + metrics.close + metrics.lastAck + metrics.closing,
-            color: 'text-gray-700 dark:text-cyan-500',
+            color: 'text-content-secondary',
         },
     ];
 
@@ -461,7 +468,7 @@ const NetworkConnectionSection = ({latestMetrics}: {latestMetrics: LatestMetrics
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
                 {items.map((item) => (
                     <div key={item.label} className="text-center">
-                        <div className="text-xs font-mono uppercase tracking-wider text-gray-600 dark:text-cyan-500">{item.label}</div>
+                        <div className="text-xs font-medium text-content-secondary">{item.label}</div>
                         <div className={`mt-1 text-lg font-semibold ${item.color}`}>{item.value}</div>
                     </div>
                 ))}
@@ -477,16 +484,16 @@ const GpuMonitorSection = ({latestMetrics}: {latestMetrics: LatestMetrics | null
         <Card title="GPU 监控" description="显卡使用情况和温度监控">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 {latestMetrics.gpu.map((gpu) => (
-                    <div key={gpu.index} className="rounded-xl border border-slate-200 bg-slate-50 p-4 backdrop-blur-sm transition hover:border-slate-300 dark:border-cyan-900/50 dark:bg-black/30 dark:hover:border-cyan-700/50">
+                    <div key={gpu.index} className="rounded-card border border-line bg-panel-muted p-4 transition-colors hover:border-line-strong">
                         <div className="mb-3 flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-200 text-gray-600 dark:bg-cyan-500/10 dark:text-cyan-500"><Zap className="h-4 w-4"/></span>
+                                <span className="flex h-9 w-9 items-center justify-center rounded-control bg-brand-muted text-brand"><Zap className="h-4 w-4"/></span>
                                 <div>
-                                    <p className="text-sm font-bold font-mono text-gray-700 dark:text-cyan-100">GPU {gpu.index}</p>
-                                    <p className="text-xs text-gray-600 dark:text-cyan-500">{gpu.name}</p>
+                                    <p className="font-mono text-sm font-bold text-content">GPU {gpu.index}</p>
+                                    <p className="text-xs text-content-secondary">{gpu.name}</p>
                                 </div>
                             </div>
-                            <span className="text-2xl font-bold text-orange-600 dark:text-purple-400">{gpu.utilization?.toFixed(1) ?? 0}%</span>
+                            <span className="text-2xl font-bold text-chart-4">{gpu.utilization?.toFixed(1) ?? 0}%</span>
                         </div>
                         <div className="space-y-2 text-xs">
                             {[
@@ -496,8 +503,8 @@ const GpuMonitorSection = ({latestMetrics}: {latestMetrics: LatestMetrics | null
                                 ['风扇转速', `${gpu.fanSpeed?.toFixed(0)}%`],
                             ].map(([label, value]) => (
                                 <div key={label} className="flex items-center justify-between">
-                                    <span className="text-xs font-mono uppercase tracking-wider text-gray-600 dark:text-cyan-500">{label}</span>
-                                    <span className="font-medium text-gray-900 dark:text-cyan-200">{value}</span>
+                                    <span className="text-xs font-medium text-content-secondary">{label}</span>
+                                    <span className="font-medium text-content">{value}</span>
                                 </div>
                             ))}
                         </div>
@@ -515,12 +522,12 @@ const TemperatureMonitorSection = ({latestMetrics}: {latestMetrics: LatestMetric
         <Card title="温度监控" description="系统各部件温度传感器数据">
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                 {[...latestMetrics.temperature].sort((a, b) => a.sensorKey.localeCompare(b.sensorKey)).map((temperature) => (
-                    <div key={temperature.sensorKey} className="rounded-xl border border-slate-200 bg-slate-50 p-4 backdrop-blur-sm transition hover:border-slate-300 dark:border-cyan-900/50 dark:bg-black/30 dark:hover:border-cyan-700/50">
+                    <div key={temperature.sensorKey} className="rounded-card border border-line bg-panel-muted p-4 transition-colors hover:border-line-strong">
                         <div className="mb-2 flex items-center gap-2">
-                            <Thermometer className="h-4 w-4 text-gray-600 dark:text-cyan-500"/>
-                            <p className="truncate text-xs font-bold font-mono uppercase tracking-wider text-gray-700 dark:text-cyan-500">{temperature.type}</p>
+                            <Thermometer className="h-4 w-4 text-content-secondary"/>
+                            <p className="truncate text-xs font-medium text-content-secondary">{temperature.type}</p>
                         </div>
-                        <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{temperature.temperature.toFixed(1)}°C</p>
+                        <p className="text-2xl font-bold text-warning">{temperature.temperature.toFixed(1)}°C</p>
                     </div>
                 ))}
             </div>
@@ -595,11 +602,11 @@ const CpuChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: CpuCh
                     <AreaChart data={chartData}>
                         <defs>
                             <linearGradient id="cpuAreaGradient" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#2563eb" stopOpacity={0.4}/>
-                                <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+                                <stop offset="5%" stopColor="var(--theme-chart-1)" stopOpacity={0.4}/>
+                                <stop offset="95%" stopColor="var(--theme-chart-1)" stopOpacity={0}/>
                             </linearGradient>
                         </defs>
-                        <CartesianGrid stroke="currentColor" strokeDasharray="4 4" className="stroke-slate-200 dark:stroke-cyan-900/30"/>
+                        <CartesianGrid stroke="currentColor" strokeDasharray="4 4" className="stroke-line"/>
                         <XAxis
                             dataKey="timestamp"
                             type="number"
@@ -609,12 +616,12 @@ const CpuChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: CpuCh
                             stroke="currentColor"
                             angle={-15}
                             textAnchor="end"
-                            className="text-xs text-gray-600 dark:text-cyan-500 font-mono"
+                            className="text-xs text-content-secondary font-mono"
                         />
                         <YAxis
                             domain={[0, 100]}
                             stroke="currentColor"
-                            className="stroke-gray-400 dark:stroke-cyan-600 text-xs"
+                            className="stroke-content-muted text-xs"
                             tickFormatter={(value) => `${value}%`}
                         />
                         <Tooltip content={<CustomTooltip unit="%" timeFormat={isLive ? 'HH:mm:ss' : undefined}/>}/>
@@ -622,7 +629,7 @@ const CpuChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: CpuCh
                             type="monotone"
                             dataKey="usage"
                             name="CPU 使用率"
-                            stroke="#2563eb"
+                            stroke="var(--theme-chart-1)"
                             strokeWidth={2}
                             fill="url(#cpuAreaGradient)"
                             activeDot={{r: 3}}
@@ -693,11 +700,11 @@ const MemoryChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
                     <AreaChart data={chartData}>
                         <defs>
                             <linearGradient id="memoryAreaGradient" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
-                                <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                <stop offset="5%" stopColor="var(--theme-chart-2)" stopOpacity={0.4}/>
+                                <stop offset="95%" stopColor="var(--theme-chart-2)" stopOpacity={0}/>
                             </linearGradient>
                         </defs>
-                        <CartesianGrid stroke="currentColor" strokeDasharray="4 4" className="stroke-slate-200 dark:stroke-cyan-900/30"/>
+                        <CartesianGrid stroke="currentColor" strokeDasharray="4 4" className="stroke-line"/>
                         <XAxis
                             dataKey="timestamp"
                             type="number"
@@ -707,12 +714,12 @@ const MemoryChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
                             stroke="currentColor"
                             angle={-15}
                             textAnchor="end"
-                            className="text-xs text-gray-600 dark:text-cyan-500 font-mono"
+                            className="text-xs text-content-secondary font-mono"
                         />
                         <YAxis
                             domain={[0, 100]}
                             stroke="currentColor"
-                            className="stroke-gray-400 dark:stroke-cyan-600 text-xs"
+                            className="stroke-content-muted text-xs"
                             tickFormatter={(value) => `${value}%`}
                         />
                         <Tooltip content={<CustomTooltip unit="%" timeFormat={isLive ? 'HH:mm:ss' : undefined}/>}/>
@@ -720,7 +727,7 @@ const MemoryChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
                             type="monotone"
                             dataKey="usage"
                             name="内存使用率"
-                            stroke="#10b981"
+                            stroke="var(--theme-chart-2)"
                             strokeWidth={2}
                             fill="url(#memoryAreaGradient)"
                             activeDot={{r: 3}}
@@ -819,15 +826,15 @@ const DiskIOChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
                     <AreaChart data={chartData}>
                         <defs>
                             <linearGradient id="colorDiskRead" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#2C70F6" stopOpacity={0.3}/>
-                                <stop offset="95%" stopColor="#2C70F6" stopOpacity={0}/>
+                                <stop offset="5%" stopColor="var(--theme-chart-1)" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="var(--theme-chart-1)" stopOpacity={0}/>
                             </linearGradient>
                             <linearGradient id="colorDiskWrite" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#6FD598" stopOpacity={0.3}/>
-                                <stop offset="95%" stopColor="#6FD598" stopOpacity={0}/>
+                                <stop offset="5%" stopColor="var(--theme-chart-2)" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="var(--theme-chart-2)" stopOpacity={0}/>
                             </linearGradient>
                         </defs>
-                        <CartesianGrid stroke="currentColor" strokeDasharray="4 4" className="stroke-slate-200 dark:stroke-cyan-900/30"/>
+                        <CartesianGrid stroke="currentColor" strokeDasharray="4 4" className="stroke-line"/>
                         <XAxis
                             dataKey="timestamp"
                             type="number"
@@ -837,12 +844,12 @@ const DiskIOChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
                             stroke="currentColor"
                             angle={-15}
                             textAnchor="end"
-                            className="text-xs text-gray-600 dark:text-cyan-500 font-mono"
+                            className="text-xs text-content-secondary font-mono"
                             height={45}
                         />
                         <YAxis
                             stroke="currentColor"
-                            className="stroke-gray-400 dark:stroke-cyan-600 text-xs"
+                            className="stroke-content-muted text-xs"
                             tickFormatter={(value) => `${value} MB`}
                         />
                         <Tooltip content={<CustomTooltip unit=" MB" timeFormat={isLive ? 'HH:mm:ss' : undefined}/>}/>
@@ -851,7 +858,7 @@ const DiskIOChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
                             type="monotone"
                             dataKey="read"
                             name="读取"
-                            stroke="#2C70F6"
+                            stroke="var(--theme-chart-1)"
                             strokeWidth={2}
                             fill="url(#colorDiskRead)"
                             activeDot={{r: 3}}
@@ -862,7 +869,7 @@ const DiskIOChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
                             type="monotone"
                             dataKey="write"
                             name="写入"
-                            stroke="#6FD598"
+                            stroke="var(--theme-chart-2)"
                             strokeWidth={2}
                             fill="url(#colorDiskWrite)"
                             activeDot={{r: 3}}
@@ -980,7 +987,7 @@ const NetworkChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: C
         <select
             value={selectedInterface}
             onChange={(e) => setSelectedInterface(e.target.value)}
-            className="rounded-lg border border-slate-200 dark:border-cyan-900/50 bg-white dark:bg-black/40 px-3 py-1.5 text-xs font-mono text-gray-700 dark:text-cyan-300 hover:border-slate-300 dark:hover:border-cyan-700 focus:border-slate-400 dark:focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-slate-200 dark:focus:ring-cyan-500/20"
+            className="rounded-control border border-line bg-panel-muted px-3 py-1.5 text-xs font-mono text-content-secondary hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
         >
             {availableInterfaces.map((iface) => (
                 <option key={iface} value={iface}>
@@ -1014,7 +1021,7 @@ const NetworkChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: C
                                 <stop offset="95%" stopColor={INTERFACE_COLORS[0].download} stopOpacity={0}/>
                             </linearGradient>
                         </defs>
-                        <CartesianGrid stroke="currentColor" strokeDasharray="4 4" className="stroke-slate-200 dark:stroke-cyan-900/30"/>
+                        <CartesianGrid stroke="currentColor" strokeDasharray="4 4" className="stroke-line"/>
                         <XAxis
                             dataKey="timestamp"
                             type="number"
@@ -1024,12 +1031,12 @@ const NetworkChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: C
                             stroke="currentColor"
                             angle={-15}
                             textAnchor="end"
-                            className="text-xs text-gray-600 dark:text-cyan-500 font-mono"
+                            className="text-xs text-content-secondary font-mono"
                             height={45}
                         />
                         <YAxis
                             stroke="currentColor"
-                            className="stroke-gray-400 dark:stroke-cyan-600 text-xs"
+                            className="stroke-content-muted text-xs"
                             tickFormatter={(value) => `${value} MB`}
                         />
                         <Tooltip content={<CustomTooltip unit=" MB/s" timeFormat={isLive ? 'HH:mm:ss' : undefined}/>}/>
@@ -1143,7 +1150,7 @@ const NetworkConnectionChart = ({agentId, timeRange, start, end, isLive, latestM
             {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={250}>
                     <LineChart data={chartData}>
-                        <CartesianGrid stroke="currentColor" strokeDasharray="4 4" className="stroke-slate-200 dark:stroke-cyan-900/30"/>
+                        <CartesianGrid stroke="currentColor" strokeDasharray="4 4" className="stroke-line"/>
                         <XAxis
                             dataKey="timestamp"
                             type="number"
@@ -1153,12 +1160,12 @@ const NetworkConnectionChart = ({agentId, timeRange, start, end, isLive, latestM
                             stroke="currentColor"
                             angle={-15}
                             textAnchor="end"
-                            className="text-xs text-gray-600 dark:text-cyan-500 font-mono"
+                            className="text-xs text-content-secondary font-mono"
                             height={45}
                         />
                         <YAxis
                             stroke="currentColor"
-                            className="stroke-gray-400 dark:stroke-cyan-600 text-xs"
+                            className="stroke-content-muted text-xs"
                         />
                         <Tooltip content={<CustomTooltip unit="" timeFormat={isLive ? 'HH:mm:ss' : undefined}/>}/>
                         <Legend/>
@@ -1166,7 +1173,7 @@ const NetworkConnectionChart = ({agentId, timeRange, start, end, isLive, latestM
                             type="monotone"
                             dataKey="established"
                             name="ESTABLISHED"
-                            stroke="#10b981"
+                            stroke="var(--theme-chart-2)"
                             strokeWidth={2}
                             dot={false}
                             activeDot={{r: 3}}
@@ -1177,7 +1184,7 @@ const NetworkConnectionChart = ({agentId, timeRange, start, end, isLive, latestM
                             type="monotone"
                             dataKey="time_wait"
                             name="TIME_WAIT"
-                            stroke="#f59e0b"
+                            stroke="var(--theme-warning)"
                             strokeWidth={2}
                             dot={false}
                             activeDot={{r: 3}}
@@ -1188,7 +1195,7 @@ const NetworkConnectionChart = ({agentId, timeRange, start, end, isLive, latestM
                             type="monotone"
                             dataKey="close_wait"
                             name="CLOSE_WAIT"
-                            stroke="#ef4444"
+                            stroke="var(--theme-danger)"
                             strokeWidth={2}
                             dot={false}
                             activeDot={{r: 3}}
@@ -1199,7 +1206,7 @@ const NetworkConnectionChart = ({agentId, timeRange, start, end, isLive, latestM
                             type="monotone"
                             dataKey="listen"
                             name="LISTEN"
-                            stroke="#3b82f6"
+                            stroke="var(--theme-chart-1)"
                             strokeWidth={2}
                             dot={false}
                             activeDot={{r: 3}}
@@ -1284,7 +1291,7 @@ const GpuChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBase) 
         <ChartContainer title="GPU 使用率与温度" icon={Zap}>
             <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={chartData}>
-                    <CartesianGrid stroke="currentColor" strokeDasharray="4 4" className="stroke-slate-200 dark:stroke-cyan-900/30"/>
+                    <CartesianGrid stroke="currentColor" strokeDasharray="4 4" className="stroke-line"/>
                     <XAxis
                         dataKey="timestamp"
                         type="number"
@@ -1292,13 +1299,13 @@ const GpuChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBase) 
                         domain={['dataMin', 'dataMax']}
                         tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
                         stroke="currentColor"
-                        className="stroke-gray-400 dark:stroke-cyan-600"
+                        className="stroke-content-muted"
                         style={{fontSize: '12px'}}
                     />
                     <YAxis
                         yAxisId="left"
                         stroke="currentColor"
-                        className="stroke-gray-400 dark:stroke-cyan-600"
+                        className="stroke-content-muted"
                         style={{fontSize: '12px'}}
                         tickFormatter={(value) => `${value}%`}
                     />
@@ -1306,7 +1313,7 @@ const GpuChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBase) 
                         yAxisId="right"
                         orientation="right"
                         stroke="currentColor"
-                        className="stroke-gray-400 dark:stroke-cyan-600"
+                        className="stroke-content-muted"
                         style={{fontSize: '12px'}}
                         tickFormatter={(value) => `${value}°C`}
                     />
@@ -1317,7 +1324,7 @@ const GpuChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBase) 
                         type="monotone"
                         dataKey="utilization"
                         name="使用率 (%)"
-                        stroke="#7c3aed"
+                        stroke="var(--theme-chart-4)"
                         strokeWidth={2}
                         dot={false}
                         activeDot={{r: 3}}
@@ -1329,7 +1336,7 @@ const GpuChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBase) 
                         type="monotone"
                         dataKey="temperature"
                         name="温度 (°C)"
-                        stroke="#f97316"
+                        stroke="var(--theme-chart-3)"
                         strokeWidth={2}
                         dot={false}
                         activeDot={{r: 3}}
@@ -1409,7 +1416,7 @@ const TemperatureChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPro
         <select
             value={selectedTempType}
             onChange={(e) => setSelectedTempType(e.target.value)}
-            className="rounded-lg border border-slate-200 dark:border-cyan-900/50 bg-white dark:bg-black/40 px-3 py-1.5 text-xs font-mono text-gray-700 dark:text-cyan-300 hover:border-slate-300 dark:hover:border-cyan-700 focus:border-slate-400 dark:focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-slate-200 dark:focus:ring-cyan-500/20"
+            className="rounded-control border border-line bg-panel-muted px-3 py-1.5 text-xs font-mono text-content-secondary hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
         >
             <option value="all">所有类型</option>
             {temperatureTypes.map((type) => (
@@ -1438,7 +1445,7 @@ const TemperatureChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPro
         <ChartContainer title="系统温度" icon={Thermometer} action={tempTypeSelector}>
             <ResponsiveContainer width="100%" height={250}>
                 <LineChart data={chartData}>
-                    <CartesianGrid stroke="currentColor" strokeDasharray="4 4" className="stroke-slate-200 dark:stroke-cyan-900/30"/>
+                    <CartesianGrid stroke="currentColor" strokeDasharray="4 4" className="stroke-line"/>
                     <XAxis
                         dataKey="timestamp"
                         type="number"
@@ -1448,12 +1455,12 @@ const TemperatureChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPro
                         stroke="currentColor"
                         angle={-15}
                         textAnchor="end"
-                        className="text-xs text-gray-600 dark:text-cyan-500 font-mono"
+                        className="text-xs text-content-secondary font-mono"
                         height={45}
                     />
                     <YAxis
                         stroke="currentColor"
-                        className="stroke-gray-400 dark:stroke-cyan-600 text-xs"
+                        className="stroke-content-muted text-xs"
                         tickFormatter={(value) => `${value}°C`}
                     />
                     <Tooltip content={<CustomTooltip unit="°C"/>}/>
@@ -1495,43 +1502,43 @@ const downsampleData = (data: any[], maxPoints: number): any[] => {
     if (!data || data.length === 0) return [];
     if (maxPoints < 2) maxPoints = 2;
     if (data.length <= maxPoints) return [...data];
-    
+
     const result: any[] = [data[0]]; // 保留第一个点
-    
+
     // 桶大小
     const bucketSize = (data.length - 2) / (maxPoints - 2);
-    
+
     for (let i = 0; i < maxPoints - 2; i++) {
         // 计算当前桶的范围
         const start = Math.floor((i + 0) * bucketSize) + 1;
         const end = Math.floor((i + 1) * bucketSize) + 1;
-        
+
         // 计算前一个点和后一个点
         const previousPoint = result[result.length - 1];
         const nextPoint = data[Math.min(end, data.length - 1)];
-        
+
         // 在桶中选择与前后点形成的三角形面积最大的点
         let maxArea = -1;
         let selectedPoint = data[start];
-        
+
         for (let j = start; j < end && j < data.length - 1; j++) {
             // 计算三角形面积
             const area = Math.abs(
                 (previousPoint.timestamp - nextPoint.timestamp) * (data[j].value - previousPoint.value) -
                 (previousPoint.timestamp - data[j].timestamp) * (nextPoint.value - previousPoint.value)
             );
-            
+
             if (area > maxArea) {
                 maxArea = area;
                 selectedPoint = data[j];
             }
         }
-        
+
         result.push(selectedPoint);
     }
-    
+
     result.push(data[data.length - 1]); // 保留最后一个点
-    
+
     return result;
 };
 
@@ -1563,14 +1570,14 @@ const getMaxDataPoints = (timeRange: string): number => {
 const generateColors = (count: number): string[] => {
     const colors: string[] = [];
     const hueStep = 360 / count; // 色相间隔
-    
+
     for (let i = 0; i < count; i++) {
         const hue = (i * hueStep) % 360;
         const saturation = 65 + (i % 3) * 10; // 65%, 75%, 85% 循环
         const lightness = 45 + (i % 2) * 10;  // 45%, 55% 循环
         colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
     }
-    
+
     return colors;
 };
 
@@ -1579,15 +1586,15 @@ const generateColors = (count: number): string[] => {
  */
 const CustomLegend = ({ onClick, selectedMonitors, allMonitorKeys, colors, collapsed }: any) => {
     if (!allMonitorKeys || allMonitorKeys.length === 0) return null;
-    
+
     if (collapsed) return null;
-    
+
     return (
         <div className="flex flex-wrap justify-center gap-4 pt-4">
             {allMonitorKeys.map((monitorKey: string, index: number) => {
                 const isSelected = selectedMonitors.has(monitorKey);
                 const color = colors[index];
-                
+
                 return (
                     <div
                         key={monitorKey}
@@ -1603,14 +1610,14 @@ const CustomLegend = ({ onClick, selectedMonitors, allMonitorKeys, colors, colla
                                 y1="6"
                                 x2="32"
                                 y2="6"
-                                stroke={isSelected ? color : '#9ca3af'}
+                                stroke={isSelected ? color : 'var(--theme-content-muted)'}
                                 strokeWidth="2"
                             />
                         </svg>
                         <span
                             className="text-xs font-medium"
                             style={{
-                                color: isSelected ? color : '#9ca3af',
+                                color: isSelected ? color : 'var(--theme-content-muted)',
                             }}
                         >
                             {monitorKey}
@@ -1706,12 +1713,12 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
                 // 单点数据，只有精确匹配才返回
                 return data[0].timestamp === targetTime ? data[0].value : null;
             }
-            
+
             // 如果目标时间在数据范围外，返回 null（断开折线）
             if (targetTime < data[0].timestamp || targetTime > data[data.length - 1].timestamp) {
                 return null;
             }
-            
+
             // 二分查找找到 targetTime 前后两个点
             let left = 0, right = data.length - 1;
             while (right - left > 1) {
@@ -1722,7 +1729,7 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
                     right = mid;
                 }
             }
-            
+
             // 线性插值
             const leftPoint = data[left];
             const rightPoint = data[right];
@@ -1799,16 +1806,16 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
                     {/* 使用提示和恢复按钮 */}
                     {allMonitorKeys.length > 1 && (
                         <div className="mb-3 flex items-center justify-between">
-                            <div className="text-xs text-gray-500 dark:text-cyan-600">
+                            <div className="text-xs text-content-muted">
                                 💡 点击图表线条或图例切换显示
                             </div>
                             {hasUnselected && (
                                 <button
                                     onClick={handleSelectAll}
                                     className="p-1.5 rounded
-                                        text-gray-500 dark:text-cyan-500 
-                                        hover:text-gray-700 dark:hover:text-cyan-400
-                                        hover:bg-gray-100 dark:hover:bg-cyan-900/30
+                                        text-content-muted
+                                        hover:text-brand
+                                        hover:bg-panel-hover
                                         transition-colors"
                                     title="恢复全选"
                                 >
@@ -1817,7 +1824,7 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
                             )}
                         </div>
                     )}
-                    
+
                     <ResponsiveContainer width="100%" height={250}>
                         <AreaChart data={chartData}>
                             <defs>
@@ -1833,7 +1840,7 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
                                 })}
                             </defs>
                             <CartesianGrid stroke="currentColor" strokeDasharray="4 4"
-                                           className="stroke-slate-200 dark:stroke-cyan-900/30"/>
+                                           className="stroke-line"/>
                             <XAxis
                                 dataKey="timestamp"
                                 type="number"
@@ -1843,12 +1850,12 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
                                 stroke="currentColor"
                                 angle={-15}
                                 textAnchor="end"
-                                className="text-xs text-gray-600 dark:text-cyan-500 font-mono"
+                                className="text-xs text-content-secondary font-mono"
                                 height={45}
                             />
                             <YAxis
                                 stroke="currentColor"
-                                className="stroke-gray-400 dark:stroke-cyan-600 text-xs"
+                                className="stroke-content-muted text-xs"
                                 tickFormatter={(value) => `${value}ms`}
                             />
                             <Tooltip
@@ -1876,7 +1883,7 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
                             })}
                         </AreaChart>
                     </ResponsiveContainer>
-                    
+
                     {/* 桌面端：直接显示图例 */}
                     {!isMobile && allMonitorKeys.length > 0 && (
                         <CustomLegend
@@ -1886,13 +1893,13 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
                             colors={colors}
                         />
                     )}
-                    
+
                     {/* 移动端：可折叠图例 */}
                     {isMobile && allMonitorKeys.length > 0 && (
                         <div className="pt-4">
                             <button
                                 onClick={toggleLegend}
-                                className="w-full flex items-center justify-center gap-2 py-2 text-xs text-gray-600 dark:text-cyan-400 hover:text-gray-900 dark:hover:text-cyan-300"
+                                className="w-full flex items-center justify-center gap-2 py-2 text-xs text-content-secondary hover:text-brand"
                             >
                                 <span>{legendCollapsed ? '显示图例' : '收起图例'}</span>
                                 {legendCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
@@ -1960,7 +1967,7 @@ const ServerDetail = () => {
     }
 
     return (
-        <div className="bg-[#f0f2f5] dark:bg-[#05050a] min-h-screen">
+        <div className="bg-page min-h-screen">
             <div className="mx-auto flex max-w-7xl flex-col px-4 pb-10 pt-4 sm:pt-6 sm:px-6 lg:px-8">
                 {/* 头部区域 */}
                 <ServerHero
