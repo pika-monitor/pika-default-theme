@@ -48,6 +48,7 @@ export const pika = {
     getNetworkInterfaces: <T = NetworkInterfacesResponse>(id: string) =>
         request<T>('/agents/' + encodeURIComponent(id) + '/network-interfaces'),
     listMonitors: <T = PublicMonitor>() => request<T[]>('/monitors'),
+    getMonitorSparklines: <T>() => request<T>('/monitors/sparklines'),
     getMonitorStats: <T = Record<string, unknown>>(id: string) =>
         request<T>('/monitors/' + encodeURIComponent(id) + '/stats'),
     getMonitorAgents: <T = AgentMonitorStat[]>(id: string) =>

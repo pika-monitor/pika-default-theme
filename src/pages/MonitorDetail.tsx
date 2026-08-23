@@ -780,7 +780,7 @@ const MonitorDetail = () => {
                 />
 
                 {/* 主内容区 */}
-                <main className="mt-6 flex-1 space-y-6 sm:space-y-8 lg:space-y-10">
+                <main className="mt-6 flex-1 space-y-6">
                     {/* 响应时间趋势图表 */}
                     <ResponseTimeChart
                         monitorId={id!}

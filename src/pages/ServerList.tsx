@@ -406,6 +406,8 @@ const ServerList = () => {
         return 'healthy' as const;
     }, [agents.length, publicSignals]);
 
+    const globalOnline = agents.length - publicSignals.offline;
+
     const handleNavigate = (agentId: string) => {
         navigate(`/servers/${agentId.substring(0, 8)}`);
     };
@@ -457,8 +459,8 @@ const ServerList = () => {
 
             <StatusSummary
                 title="公开运行状态"
-                current={stats.online}
-                total={stats.total}
+                current={globalOnline}
+                total={agents.length}
                 currentLabel="台设备当前在线"
                 status={summaryStatus}
                 signals={[

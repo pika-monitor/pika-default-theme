@@ -2026,7 +2026,7 @@ const ServerDetail = () => {
                 />
 
                 {/* 主内容区 */}
-                <main className="mt-6 flex-1 space-y-6 sm:space-y-8 lg:space-y-10">
+                <main className="mt-6 flex-1 space-y-6">
                     {isOnline && isLatestMetricsError && (
                         <ErrorState className="min-h-[180px]" message="设备当前在线，但实时指标加载失败。" onRetry={() => void refetchLatestMetrics()}/>
                     )}

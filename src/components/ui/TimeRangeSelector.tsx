@@ -29,6 +29,7 @@ const controlClass = 'rounded-control border border-line bg-panel px-3 py-1.5 fo
 
 export const TimeRangeSelector = ({value, onChange, options, enableCustom = false, customRange, onCustomRangeApply, className}: TimeRangeSelectorProps) => {
     const idPrefix = useId();
+    const [customOpen, setCustomOpen] = useState(false);
     const [customStart, setCustomStart] = useState('');
     const [customEnd, setCustomEnd] = useState('');
 
@@ -45,13 +46,33 @@ export const TimeRangeSelector = ({value, onChange, options, enableCustom = fals
     return (
         <div className={cn('flex flex-wrap items-center gap-2', className)}>
             <label htmlFor={`${idPrefix}-range`} className="sr-only">时间范围</label>
-            <select id={`${idPrefix}-range`} aria-label="时间范围" value={showCustomOption ? 'custom' : value} onChange={(event) => event.target.value !== 'custom' && onChange(event.target.value)} className={controlClass}>
+            <select
+                id={`${idPrefix}-range`}
+                aria-label="时间范围"
+                value={showCustomOption ? 'custom' : value}
+                onChange={(event) => {
+                    if (event.target.value === 'custom') return;
+                    setCustomOpen(false);
+                    onChange(event.target.value);
+                }}
+                className={controlClass}
+            >
                 {showCustomOption && <option value="custom" disabled>自定义</option>}
                 {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
             {enableCustom && (
-                <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-xs font-medium text-content-secondary">自定义</span>
+                <button
+                    type="button"
+                    aria-expanded={customOpen}
+                    aria-controls={`${idPrefix}-custom-range`}
+                    onClick={() => setCustomOpen(open => !open)}
+                    className={cn(controlClass, customOpen && 'border-brand/30 bg-brand-muted text-brand')}
+                >
+                    {showCustomOption ? '调整自定义范围' : '自定义时间'}
+                </button>
+            )}
+            {enableCustom && customOpen && (
+                <div id={`${idPrefix}-custom-range`} className="flex w-full flex-wrap items-center justify-end gap-2 pt-1">
                     <label htmlFor={`${idPrefix}-start`} className="sr-only">开始时间</label>
                     <input id={`${idPrefix}-start`} aria-label="开始时间" type="datetime-local" value={customStart} onChange={(event) => setCustomStart(event.target.value)} className={cn(controlClass, 'px-2 py-1')}/>
                     <span className="font-mono text-xs text-content-muted">至</span>
@@ -59,11 +80,19 @@ export const TimeRangeSelector = ({value, onChange, options, enableCustom = fals
                     <input id={`${idPrefix}-end`} aria-label="结束时间" type="datetime-local" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} className={cn(controlClass, 'px-2 py-1')}/>
                     <button
                         type="button"
+                        onClick={() => setCustomOpen(false)}
+                        className="rounded-control border border-line bg-panel px-3 py-1.5 font-mono text-xs font-medium text-content-secondary transition-colors hover:bg-panel-hover hover:text-content"
+                    >
+                        取消
+                    </button>
+                    <button
+                        type="button"
                         disabled={!canApply}
                         onClick={() => {
                             if (!canApply || startMs === null || endMs === null) return;
                             onCustomRangeApply?.({start: startMs, end: endMs});
                             onChange('custom');
+                            setCustomOpen(false);
                         }}
                         className="rounded-control bg-brand px-3 py-1.5 font-mono text-xs font-bold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-panel-muted disabled:text-content-muted"
                     >

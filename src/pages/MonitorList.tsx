@@ -2,9 +2,8 @@ import {useMemo, useState} from 'react';
 import {Link} from 'react-router-dom';
 import {useQuery} from '@tanstack/react-query';
 import {AlertTriangle, BarChart3, CheckCircle2, Globe, Loader2, Maximize2, Search, Shield, Zap} from 'lucide-react';
-import {Area, AreaChart, ResponsiveContainer} from 'recharts';
 import {pika} from '../api';
-import type {MonitorSparklinePoint, PublicMonitor} from '../types';
+import type {MonitorSparklinePoint, PublicMonitor, PublicMonitorSparklinesResponse} from '../types';
 import {cn, formatDateTime} from '../lib/utils';
 import {Card, CertificateBadge, ErrorState, MonitorTypeIcon, StatCard, StatusBadge, StatusSummary} from '../components/index';
 import {
@@ -34,36 +33,47 @@ const MiniChart = ({data, displayMode, lastValue, id}: {
         return <div className="flex h-16 w-full items-center justify-center text-xs text-content-muted">暂无数据</div>;
     }
 
+    const width = 320;
+    const height = 64;
+    const padding = 4;
+    const values = chartData.map(point => point.value);
+    const minValue = Math.min(...values);
+    const maxValue = Math.max(...values);
+    const valueRange = maxValue - minValue || 1;
+    const points = chartData.map((point, index) => ({
+        x: chartData.length === 1
+            ? width / 2
+            : padding + index * ((width - padding * 2) / (chartData.length - 1)),
+        y: padding + (maxValue - point.value) / valueRange * (height - padding * 2),
+    }));
+    const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' ');
+    const areaPath = `M ${points[0].x.toFixed(2)} ${height - padding} ${linePath.replace(/^M/, 'L')} L ${points[points.length - 1].x.toFixed(2)} ${height - padding} Z`;
     const color = lastValue !== undefined && lastValue <= 200 ? 'var(--theme-chart-1)' : 'var(--theme-warning)';
     return (
-        <div className="-mb-2 h-16 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
-                    <defs>
-                        <linearGradient id={`colorLatency-${id}`} x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={color} stopOpacity={0.3}/>
-                            <stop offset="100%" stopColor={color} stopOpacity={0}/>
-                        </linearGradient>
-                    </defs>
-                    <Area
-                        type="monotone"
-                        dataKey="value"
-                        stroke={color}
-                        fill={`url(#colorLatency-${id})`}
-                        strokeWidth={2}
-                        isAnimationActive={false}
-                        connectNulls
-                        dot={false}
-                    />
-                </AreaChart>
-            </ResponsiveContainer>
-        </div>
+        <svg
+            viewBox={`0 0 ${width} ${height}`}
+            preserveAspectRatio="none"
+            className="-mb-2 h-16 w-full overflow-visible"
+            role="img"
+            aria-label={`最近一小时${displayMode === 'avg' ? '平均' : '最差'}响应时间趋势`}
+        >
+            <defs>
+                <linearGradient id={`colorLatency-${id}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={color} stopOpacity={0.28}/>
+                    <stop offset="100%" stopColor={color} stopOpacity={0}/>
+                </linearGradient>
+            </defs>
+            <path d={areaPath} fill={`url(#colorLatency-${id})`}/>
+            <path d={linePath} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke"/>
+            {points.length === 1 && <circle cx={points[0].x} cy={points[0].y} r="2.5" fill={color}/>}
+        </svg>
     );
 };
 
-const MonitorCard = ({monitor, displayMode}: {
+const MonitorCard = ({monitor, displayMode, sparkline}: {
     monitor: PublicMonitor;
     displayMode: DisplayMode;
+    sparkline: MonitorSparklinePoint[];
 }) => {
     const displayValue = displayMode === 'avg' ? monitor.responseTime : monitor.responseTimeMax;
     const displayLabel = displayMode === 'avg' ? '平均延迟' : '最差节点延迟';
@@ -137,7 +147,7 @@ const MonitorCard = ({monitor, displayMode}: {
 
             {/* 迷你走势图 */}
             <MiniChart
-                data={monitor.sparkline ?? []}
+                data={sparkline}
                 displayMode={displayMode}
                 lastValue={displayValue}
                 id={monitor.id}
@@ -190,6 +200,19 @@ const MonitorList = () => {
         queryKey: ['publicMonitors'],
         queryFn: () => pika.listMonitors<PublicMonitor>(),
         refetchInterval: 30000,
+    });
+
+    const visibleMonitorKey = useMemo(
+        () => monitors.map(monitor => monitor.id).sort().join(':'),
+        [monitors],
+    );
+    const {data: sparklineData} = useQuery<PublicMonitorSparklinesResponse>({
+        queryKey: ['publicMonitorSparklines', visibleMonitorKey],
+        queryFn: () => pika.getMonitorSparklines<PublicMonitorSparklinesResponse>(),
+        enabled: monitors.length > 0,
+        refetchInterval: 30000,
+        staleTime: 15000,
+        retry: 1,
     });
 
     // 过滤和搜索
@@ -364,6 +387,7 @@ const MonitorList = () => {
                             <MonitorCard
                                 monitor={monitor}
                                 displayMode={displayMode}
+                                sparkline={sparklineData?.items[monitor.id] ?? []}
                             />
                         </Link>
                     ))}
