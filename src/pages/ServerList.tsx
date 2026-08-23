@@ -18,9 +18,10 @@ import {
 } from 'lucide-react';
 import {pika} from '../api';
 import type {LatestMetrics, TagsResponse} from '../types';
-import {cn, formatBytes, formatSpeed, formatUptime, isExpired} from '../lib/utils';
-import {AgentExpiryBadge, AgentOfflineState, Card, LoadingSpinner, MetricBar, StatCard, StatusBadge, StatusSummary} from '../components/index';
+import {cn, formatBytes, formatSpeed, formatUptime, isExpired, isExpiringSoon} from '../lib/utils';
+import {AgentExpiryBadge, AgentOfflineState, Card, ErrorState, LoadingSpinner, MetricBar, StatCard, StatusBadge, StatusSummary} from '../components/index';
 import {hasAgentResourcePressure, isAgentOnline, isAgentTrafficNearLimit, type AgentWithMetrics} from '../domain/agents/agent-view-model';
+import PublicPageContainer from '../layouts/PublicPageContainer';
 
 /* ========================================== 共享辅助函数 ========================================== */
 
@@ -46,7 +47,7 @@ const getTemperatures = (metrics?: LatestMetrics) => {
         return [];
     }
     // 返回所有温度数据
-    return metrics.temperature.sort((a, b) => a.type.localeCompare(b.type));
+    return [...metrics.temperature].sort((a, b) => a.type.localeCompare(b.type));
 };
 
 const getTrafficProgressColor = (percent: number) => {
@@ -86,9 +87,8 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
         : 0;
 
     return (
-        <Link to={`/servers/${server.id.substring(0, 8)}`}>
-            <Card interactive>
-                <div className="relative z-10 p-5 space-y-2">
+        <Link to={`/servers/${server.id.substring(0, 8)}`} className="block h-full">
+            <Card className="h-full space-y-2 p-5" interactive>
                     {/* 顶部：名称和状态 */}
                     <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
@@ -252,7 +252,6 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
                             </div>
                         )}
                     </div>}
-                </div>
             </Card>
         </Link>
     );
@@ -313,7 +312,7 @@ const ServerList = () => {
     const navigate = useNavigate();
     const [selectedTag, setSelectedTag] = useState<string>('');
 
-    const {data: agents = [], isLoading} = useQuery<AgentWithMetrics[]>({
+    const {data: agents = [], isLoading, isError, refetch} = useQuery<AgentWithMetrics[]>({
         queryKey: ['agents', 'online'],
         queryFn: () => pika.listAgents<AgentWithMetrics>(),
         refetchInterval: 3000,
@@ -391,11 +390,21 @@ const ServerList = () => {
     const publicSignals = useMemo(() => {
         const offline = agents.filter(agent => !isAgentOnline(agent)).length;
         const expired = agents.filter(agent => agent.expireTime > 0 && isExpired(agent.expireTime)).length;
+        const expiringSoon = agents.filter(agent => isExpiringSoon(agent.expireTime)).length;
         const resourcePressure = agents.filter(hasAgentResourcePressure).length;
         const trafficNearLimit = agents.filter(isAgentTrafficNearLimit).length;
 
-        return {offline, expired, resourcePressure, trafficNearLimit};
+        return {offline, expired, expiringSoon, resourcePressure, trafficNearLimit};
     }, [agents]);
+
+    const summaryStatus = useMemo(() => {
+        if (agents.length === 0) return 'unknown' as const;
+        if (publicSignals.offline === agents.length) return 'down' as const;
+        if (publicSignals.offline > 0 || publicSignals.expired > 0 || publicSignals.expiringSoon > 0 || publicSignals.resourcePressure > 0 || publicSignals.trafficNearLimit > 0) {
+            return 'degraded' as const;
+        }
+        return 'healthy' as const;
+    }, [agents.length, publicSignals]);
 
     const handleNavigate = (agentId: string) => {
         navigate(`/servers/${agentId.substring(0, 8)}`);
@@ -405,11 +414,19 @@ const ServerList = () => {
         return <LoadingSpinner/>;
     }
 
+    if (isError) {
+        return (
+            <PublicPageContainer className="py-4 sm:py-8">
+                <ErrorState message="设备状态接口暂时不可用，页面不会把请求失败误判为暂无设备。" onRetry={() => void refetch()}/>
+            </PublicPageContainer>
+        );
+    }
+
     // debug
     // displayAgents = Array.from({length:10}, ()=>displayAgents).flat();
 
     return (
-        <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-4 sm:space-y-6">
+        <PublicPageContainer className="space-y-4 py-4 sm:space-y-6 sm:py-8">
             {/* 统计卡片 */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
                 <StatCard
@@ -443,12 +460,15 @@ const ServerList = () => {
                 current={stats.online}
                 total={stats.total}
                 currentLabel="台设备当前在线"
-                status={publicSignals.offline > 0 || publicSignals.expired > 0 ? 'degraded' : 'healthy'}
+                status={summaryStatus}
                 signals={[
-                    publicSignals.offline > 0
+                    agents.length === 0
+                        ? {label: '暂无设备状态数据', status: 'unknown'}
+                        : publicSignals.offline > 0
                         ? {label: `${publicSignals.offline} 台暂不可达`, status: 'down', onClick: () => setSelectedTag('OFFLINE')}
                         : {label: '所有设备可达', status: 'healthy'},
                     publicSignals.expired > 0 && {label: `${publicSignals.expired} 台已过期`, status: 'degraded', onClick: () => setSelectedTag('EXPIRED')},
+                    publicSignals.expiringSoon > 0 && {label: `${publicSignals.expiringSoon} 台即将到期`, status: 'degraded'},
                     publicSignals.resourcePressure > 0 && {label: `${publicSignals.resourcePressure} 台资源负载较高`, status: 'degraded'},
                     publicSignals.trafficNearLimit > 0 && {label: `${publicSignals.trafficNearLimit} 台流量接近限额`, status: 'degraded'},
                 ]}
@@ -500,8 +520,8 @@ const ServerList = () => {
             {/* 服务器列表 */}
             {displayAgents.length === 0 ? (
                 <ServerListEmpty
-                    title={selectedTag ? '没有匹配的服务器' : '暂无在线服务器'}
-                    description={selectedTag ? `标签 "${selectedTag}" 下暂无服务器` : '当前没有任何探针在线，请稍后再试。'}
+                    title={selectedTag ? '没有匹配的设备' : '暂无设备'}
+                    description={selectedTag ? `当前筛选条件“${FILTER_LABELS[selectedTag] ?? selectedTag}”下暂无设备` : '当前没有可展示的公开探针。'}
                 />
             ) : (
                 <>
@@ -745,7 +765,7 @@ const ServerList = () => {
                     </div>
                 </>
             )}
-        </div>
+        </PublicPageContainer>
     );
 };
 

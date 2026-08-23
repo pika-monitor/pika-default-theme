@@ -1,5 +1,5 @@
 import type {LucideIcon} from 'lucide-react';
-import {AlertCircle, Loader2, TrendingUp} from 'lucide-react';
+import {AlertCircle, AlertTriangle, Loader2, RefreshCw, TrendingUp} from 'lucide-react';
 import {cn} from '../../lib/utils';
 
 interface ChartPlaceholderProps {
@@ -53,6 +53,36 @@ export const LoadingSpinner = ({message = '数据加载中，请稍候...'}: {me
         <div className="flex flex-col items-center gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-brand"/>
             <p className="font-mono text-sm text-content-secondary">{message}</p>
+        </div>
+    </div>
+);
+
+interface ErrorStateProps {
+    message?: string;
+    onRetry?: () => void;
+    className?: string;
+}
+
+export const ErrorState = ({message = '数据加载失败，请稍后重试', onRetry, className}: ErrorStateProps) => (
+    <div role="alert" className={cn('flex min-h-[320px] items-center justify-center rounded-card border border-danger/20 bg-danger-muted/30 p-6', className)}>
+        <div className="flex max-w-md flex-col items-center gap-3 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-danger-muted text-danger">
+                <AlertTriangle className="h-7 w-7"/>
+            </div>
+            <div>
+                <p className="text-sm font-semibold text-content">暂时无法获取状态数据</p>
+                <p className="mt-1 text-xs text-content-secondary">{message}</p>
+            </div>
+            {onRetry && (
+                <button
+                    type="button"
+                    onClick={onRetry}
+                    className="mt-1 inline-flex items-center gap-2 rounded-control border border-danger/25 bg-panel px-3 py-2 text-xs font-medium text-danger transition-colors hover:bg-panel-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger"
+                >
+                    <RefreshCw className="h-3.5 w-3.5"/>
+                    重新加载
+                </button>
+            )}
         </div>
     </div>
 );

@@ -1,5 +1,6 @@
 import {Heart} from 'lucide-react';
 import {getRuntimeConfig} from '../api';
+import PublicPageContainer from './PublicPageContainer';
 
 const PublicFooter = () => {
     const currentYear = new Date().getFullYear();
@@ -8,7 +9,7 @@ const PublicFooter = () => {
 
     return (
         <footer className="border-t border-line bg-page transition-colors duration-300">
-            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <PublicPageContainer>
                 <div className="py-6">
                     <div className="flex flex-col items-center justify-between gap-4 font-mono text-xs text-content-muted sm:flex-row">
                         <div className="flex flex-wrap items-center justify-center gap-2">
@@ -47,7 +48,7 @@ const PublicFooter = () => {
                         </div>
                     </div>
                 </div>
-            </div>
+            </PublicPageContainer>
             <div className="h-px w-full bg-line"/>
         </footer>
     );

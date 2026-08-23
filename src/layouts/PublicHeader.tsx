@@ -4,6 +4,7 @@ import {Link, NavLink} from 'react-router-dom';
 import {getRuntimeConfig, pika} from '../api';
 import {useColorMode} from '../contexts/ColorMode';
 import {cn} from '../lib/utils';
+import PublicPageContainer from './PublicPageContainer';
 
 const navigation = [
     {icon: ServerIcon, label: '设备监控', to: '/', end: true},
@@ -168,22 +169,22 @@ const PublicHeader = () => {
     return (
         <>
             <header className="fixed inset-x-0 top-0 z-40 border-b border-line bg-white/80 backdrop-blur-xl transition-colors duration-300 dark:bg-slate-950/85">
-                <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4">
-                    <div className="flex items-center gap-8">
-                        <Link to="/" className="flex items-center gap-3">
+                <PublicPageContainer className="flex h-20 items-center justify-between">
+                    <div className="flex min-w-0 items-center gap-8">
+                        <Link to="/" className="flex min-w-0 items-center gap-3" aria-label={`${runtime.system.nameZh}首页`}>
                             <img
                                 src="/api/logo"
-                                className="h-8 w-8 rounded-md object-contain sm:h-9 sm:w-9"
+                                className="h-8 w-8 shrink-0 rounded-md object-contain sm:h-9 sm:w-9"
                                 alt="logo"
                                 onError={(event) => {
                                     event.currentTarget.src = '/logo.png';
                                 }}
                             />
-                            <div>
-                                <h1 className="text-2xl font-black uppercase italic tracking-widest text-content">
+                            <div className="min-w-0">
+                                <h1 className="truncate text-xl font-black uppercase italic tracking-widest text-content sm:text-2xl">
                                     <span className="bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-700 bg-clip-text text-transparent dark:from-blue-400 dark:via-indigo-400 dark:to-blue-300">{leftName}</span>{rightName}
                                 </h1>
-                                <p className="font-mono text-xs uppercase tracking-[0.3em] text-blue-600/80 dark:text-blue-400/80">
+                                <p className="truncate font-mono text-[10px] uppercase tracking-[0.24em] text-blue-600/80 dark:text-blue-400/80 sm:text-xs sm:tracking-[0.3em]">
                                     {runtime.system.nameZh}
                                 </p>
                             </div>
@@ -218,7 +219,7 @@ const PublicHeader = () => {
                     >
                         {mobileMenuOpen ? <X className="h-6 w-6"/> : <Menu className="h-6 w-6"/>}
                     </button>
-                </div>
+                </PublicPageContainer>
             </header>
 
             {mobileMenuOpen && (

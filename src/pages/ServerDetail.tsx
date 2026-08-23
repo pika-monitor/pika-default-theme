@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import type {LucideIcon} from 'lucide-react';
 import type {Agent, LatestMetrics} from '../types';
+import {PikaAPIError} from '../api';
 import {
     INTERFACE_COLORS,
     LIVE_INITIAL_RANGE,
@@ -47,12 +48,14 @@ import {
     ChartPlaceholder,
     CustomTooltip,
     EmptyState,
+    ErrorState,
     LoadingSpinner,
     MetricItem,
     StatusBadge,
     TimeRangeSelector
 } from '../components/index';
 import {isAgentOnline} from '../domain/agents/agent-view-model';
+import PublicPageContainer from '../layouts/PublicPageContainer';
 
 /* ========================================== 共享工具 ========================================== */
 
@@ -83,6 +86,12 @@ const ChartContainer = ({title, icon: Icon, children, action}: ChartContainerPro
         </section>
     );
 };
+
+const ChartQueryError = ({title, icon}: {title: string; icon: LucideIcon}) => (
+    <ChartContainer title={title} icon={icon}>
+        <ChartPlaceholder title="数据加载失败" subtitle="无法获取该指标，请稍后重试"/>
+    </ChartContainer>
+);
 
 /* ========================================== ServerHero ========================================== */
 
@@ -558,7 +567,7 @@ const CpuChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: CpuCh
     const rangeMs = start !== undefined && end !== undefined ? end - start : undefined;
     const effectiveRange = isLive ? LIVE_INITIAL_RANGE : timeRange;
     // 数据查询
-    const {data: metricsResponse, isLoading} = useMetricsQuery({
+    const {data: metricsResponse, isLoading, isError} = useMetricsQuery({
         agentId,
         type: 'cpu',
         range: start !== undefined && end !== undefined ? undefined : effectiveRange,
@@ -594,6 +603,8 @@ const CpuChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: CpuCh
             </ChartContainer>
         );
     }
+
+    if (isError) return <ChartQueryError title="CPU 使用率" icon={Cpu}/>;
 
     return (
         <ChartContainer title="CPU 使用率" icon={Cpu}>
@@ -656,7 +667,7 @@ const MemoryChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
     const rangeMs = start !== undefined && end !== undefined ? end - start : undefined;
     const effectiveRange = isLive ? LIVE_INITIAL_RANGE : timeRange;
     // 数据查询
-    const {data: metricsResponse, isLoading} = useMetricsQuery({
+    const {data: metricsResponse, isLoading, isError} = useMetricsQuery({
         agentId,
         type: 'memory',
         range: start !== undefined && end !== undefined ? undefined : effectiveRange,
@@ -692,6 +703,8 @@ const MemoryChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
             </ChartContainer>
         );
     }
+
+    if (isError) return <ChartQueryError title="内存使用率" icon={MemoryStick}/>;
 
     return (
         <ChartContainer title="内存使用率" icon={MemoryStick}>
@@ -755,7 +768,7 @@ const DiskIOChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
     const rangeMs = start !== undefined && end !== undefined ? end - start : undefined;
     const effectiveRange = isLive ? LIVE_INITIAL_RANGE : timeRange;
     // 数据查询
-    const {data: metricsResponse, isLoading} = useMetricsQuery({
+    const {data: metricsResponse, isLoading, isError} = useMetricsQuery({
         agentId,
         type: 'disk_io',
         range: start !== undefined && end !== undefined ? undefined : effectiveRange,
@@ -818,6 +831,8 @@ const DiskIOChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
             </ChartContainer>
         );
     }
+
+    if (isError) return <ChartQueryError title="磁盘 I/O (MB/s)" icon={HardDrive}/>;
 
     return (
         <ChartContainer title="磁盘 I/O (MB/s)" icon={HardDrive}>
@@ -912,7 +927,7 @@ const NetworkChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: C
     }, [availableInterfaces, selectedInterface]);
 
     // 查询网络数据
-    const {data: metricsResponse, isLoading} = useMetricsQuery({
+    const {data: metricsResponse, isLoading, isError} = useMetricsQuery({
         agentId,
         type: 'network',
         range: start !== undefined && end !== undefined ? undefined : effectiveRange,
@@ -985,6 +1000,7 @@ const NetworkChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: C
     // 网卡选择器
     const interfaceSelector = availableInterfaces.length > 0 && (
         <select
+            aria-label="网络接口"
             value={selectedInterface}
             onChange={(e) => setSelectedInterface(e.target.value)}
             className="rounded-control border border-line bg-panel-muted px-3 py-1.5 text-xs font-mono text-content-secondary hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
@@ -1005,6 +1021,8 @@ const NetworkChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: C
             </ChartContainer>
         );
     }
+
+    if (isError) return <ChartQueryError title="网络流量 (MB/s)" icon={Network}/>;
 
     return (
         <ChartContainer title="网络流量（MB/s）" icon={Network} action={interfaceSelector}>
@@ -1085,7 +1103,7 @@ interface ConnPoint {
 const NetworkConnectionChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: ChartPropsBase) => {
     const rangeMs = start !== undefined && end !== undefined ? end - start : undefined;
     const effectiveRange = isLive ? LIVE_INITIAL_RANGE : timeRange;
-    const {data: metricsResponse, isLoading} = useMetricsQuery({
+    const {data: metricsResponse, isLoading, isError} = useMetricsQuery({
         agentId,
         type: 'network_connection',
         range: start !== undefined && end !== undefined ? undefined : effectiveRange,
@@ -1144,6 +1162,8 @@ const NetworkConnectionChart = ({agentId, timeRange, start, end, isLive, latestM
             </ChartContainer>
         );
     }
+
+    if (isError) return <ChartQueryError title="网络连接统计" icon={Network}/>;
 
     return (
         <ChartContainer title="网络连接统计" icon={Network}>
@@ -1228,7 +1248,7 @@ const GpuChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBase) 
     const rangeMs = start !== undefined && end !== undefined ? end - start : undefined;
     const effectiveRange = isLive ? LIVE_INITIAL_RANGE : timeRange;
     // 数据查询
-    const {data: metricsResponse, isLoading} = useMetricsQuery({
+    const {data: metricsResponse, isLoading, isError} = useMetricsQuery({
         agentId,
         type: 'gpu',
         range: start !== undefined && end !== undefined ? undefined : effectiveRange,
@@ -1281,6 +1301,8 @@ const GpuChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBase) 
             </ChartContainer>
         );
     }
+
+    if (isError) return <ChartQueryError title="GPU 使用率与温度" icon={Zap}/>;
 
     // 如果没有 GPU 数据，不渲染组件
     if (chartData.length === 0) {
@@ -1359,7 +1381,7 @@ const TemperatureChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPro
     const effectiveRange = isLive ? LIVE_INITIAL_RANGE : timeRange;
 
     // 数据查询：温度采集 5s 一次，实时模式 5s 重查
-    const {data: metricsResponse, isLoading} = useMetricsQuery({
+    const {data: metricsResponse, isLoading, isError} = useMetricsQuery({
         agentId,
         type: 'temperature',
         range: start !== undefined && end !== undefined ? undefined : effectiveRange,
@@ -1414,6 +1436,7 @@ const TemperatureChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPro
     // 温度类型选择器
     const tempTypeSelector = temperatureTypes.length > 1 && (
         <select
+            aria-label="温度传感器类型"
             value={selectedTempType}
             onChange={(e) => setSelectedTempType(e.target.value)}
             className="rounded-control border border-line bg-panel-muted px-3 py-1.5 text-xs font-mono text-content-secondary hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
@@ -1435,6 +1458,8 @@ const TemperatureChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPro
             </ChartContainer>
         );
     }
+
+    if (isError) return <ChartQueryError title="系统温度" icon={Thermometer}/>;
 
     // 如果没有温度数据，不渲染组件
     if (chartData.length === 0 || temperatureTypes.length === 0) {
@@ -1596,10 +1621,12 @@ const CustomLegend = ({ onClick, selectedMonitors, allMonitorKeys, colors, colla
                 const color = colors[index];
 
                 return (
-                    <div
+                    <button
+                        type="button"
                         key={monitorKey}
                         onClick={() => onClick({ value: monitorKey })}
-                        className="flex items-center gap-2 cursor-pointer transition-opacity"
+                        aria-pressed={isSelected}
+                        className="flex cursor-pointer items-center gap-2 rounded-control px-1 py-0.5 transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                         style={{
                             opacity: isSelected ? 1 : 0.4,
                         }}
@@ -1622,7 +1649,7 @@ const CustomLegend = ({ onClick, selectedMonitors, allMonitorKeys, colors, colla
                         >
                             {monitorKey}
                         </span>
-                    </div>
+                    </button>
                 );
             })}
         </div>
@@ -1638,7 +1665,7 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
     const effectiveRange = isLive ? '15m' : timeRange;
 
     // 数据查询
-    const {data: metricsResponse, isLoading} = useMetricsQuery({
+    const {data: metricsResponse, isLoading, isError} = useMetricsQuery({
         agentId,
         type: 'monitor',
         range: start !== undefined && end !== undefined ? undefined : effectiveRange,
@@ -1785,11 +1812,6 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
     // 切换图例显示/隐藏（仅移动端）
     const toggleLegend = () => setLegendCollapsed((collapsed) => !collapsed);
 
-    // 如果没有数据且不是加载中，不渲染组件
-    if (!isLoading && chartData.length === 0) {
-        return null;
-    }
-
     // 渲染
     if (isLoading) {
         return (
@@ -1797,6 +1819,13 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
                 <ChartPlaceholder/>
             </ChartContainer>
         );
+    }
+
+    if (isError) return <ChartQueryError title="监控响应时间" icon={Activity}/>;
+
+    // 如果没有数据且不是加载中，不渲染组件
+    if (chartData.length === 0) {
+        return null;
     }
 
     return (
@@ -1811,7 +1840,9 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
                             </div>
                             {hasUnselected && (
                                 <button
+                                    type="button"
                                     onClick={handleSelectAll}
+                                    aria-label="恢复显示全部监控项"
                                     className="p-1.5 rounded
                                         text-content-muted
                                         hover:text-brand
@@ -1898,7 +1929,9 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
                     {isMobile && allMonitorKeys.length > 0 && (
                         <div className="pt-4">
                             <button
+                                type="button"
                                 onClick={toggleLegend}
+                                aria-expanded={!legendCollapsed}
                                 className="w-full flex items-center justify-center gap-2 py-2 text-xs text-content-secondary hover:text-brand"
                             >
                                 <span>{legendCollapsed ? '显示图例' : '收起图例'}</span>
@@ -1945,11 +1978,16 @@ const ServerDetail = () => {
 
     // 查询基础数据（用于页面头部和系统信息）
     // 实时模式 1s 拉取最新指标，其余 5s
-    const {data: agentResponse, isLoading} = useAgentQuery(id);
-    const {data: latestMetricsResponse} = useLatestMetricsQuery(id, isLive ? 1000 : 5000);
+    const {data: agentResponse, isLoading, isError, error, refetch} = useAgentQuery(id);
+    const isOnline = isAgentOnline(agentResponse);
+    const {
+        data: latestMetricsResponse,
+        isError: isLatestMetricsError,
+        refetch: refetchLatestMetrics,
+    } = useLatestMetricsQuery(id, isLive ? 1000 : 5000, isOnline);
 
     const agent = agentResponse;
-    const latestMetrics = latestMetricsResponse || null;
+    const latestMetrics = isOnline ? latestMetricsResponse || null : null;
 
     const deviceIpInterfaces = (latestMetrics?.networkInterfaces || [])
         .map((netInterface) => ({
@@ -1962,13 +2000,24 @@ const ServerDetail = () => {
         return <LoadingSpinner/>;
     }
 
+    if (isError) {
+        if (error instanceof PikaAPIError && error.status === 404) {
+            return <EmptyState message="设备不存在或当前不可见"/>;
+        }
+        return (
+            <PublicPageContainer className="py-4 sm:py-6">
+                <ErrorState message="设备详情接口暂时不可用。" onRetry={() => void refetch()}/>
+            </PublicPageContainer>
+        );
+    }
+
     if (!agent) {
         return <EmptyState/>;
     }
 
     return (
-        <div className="bg-page min-h-screen">
-            <div className="mx-auto flex max-w-7xl flex-col px-4 pb-10 pt-4 sm:pt-6 sm:px-6 lg:px-8">
+        <div className="bg-page">
+            <PublicPageContainer className="flex flex-col pb-10 pt-4 sm:pt-6">
                 {/* 头部区域 */}
                 <ServerHero
                     agent={agent}
@@ -1977,7 +2026,10 @@ const ServerDetail = () => {
                 />
 
                 {/* 主内容区 */}
-                <main className="flex-1 py-6 sm:py-8 lg:py-10 space-y-6 sm:space-y-8 lg:space-y-10">
+                <main className="mt-6 flex-1 space-y-6 sm:space-y-8 lg:space-y-10">
+                    {isOnline && isLatestMetricsError && (
+                        <ErrorState className="min-h-[180px]" message="设备当前在线，但实时指标加载失败。" onRetry={() => void refetchLatestMetrics()}/>
+                    )}
                     {/* 网络地址信息 */}
                     {(agent.ipv4 || agent.ipv6 || deviceIpInterfaces?.length > 0) && (
                         <NetworkAddressSection
@@ -2056,7 +2108,7 @@ const ServerDetail = () => {
                     {/* 温度监控 */}
                     <TemperatureMonitorSection latestMetrics={latestMetrics}/>
                 </main>
-            </div>
+            </PublicPageContainer>
         </div>
     );
 };

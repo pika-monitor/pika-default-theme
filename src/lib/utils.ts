@@ -66,6 +66,14 @@ export const formatChartTime = (timestamp: number, timeRange: string, rangeMs?: 
     return date.toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'});
 };
 
-export const isExpired = (expireTime?: number) => {
-    return Boolean(expireTime && expireTime > 0 && expireTime - Date.now() < 30 * 24 * 60 * 60 * 1000);
-};
+const EXPIRING_SOON_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
+export const isExpired = (expireTime?: number, now = Date.now()) => Boolean(
+    expireTime && expireTime > 0 && expireTime <= now,
+);
+
+export const isExpiringSoon = (expireTime?: number, now = Date.now()) => Boolean(
+    expireTime
+    && expireTime > now
+    && expireTime - now <= EXPIRING_SOON_WINDOW_MS,
+);

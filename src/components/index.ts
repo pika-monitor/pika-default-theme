@@ -1,5 +1,5 @@
 export {Card} from './ui/Card';
-export {ChartPlaceholder, EmptyState, LoadingSpinner} from './ui/Feedback';
+export {ChartPlaceholder, EmptyState, ErrorState, LoadingSpinner} from './ui/Feedback';
 export {TimeRangeSelector} from './ui/TimeRangeSelector';
 export {CustomTooltip} from './charts/CustomTooltip';
 export {CertificateBadge} from './status/CertificateBadge';

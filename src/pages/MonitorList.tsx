@@ -4,9 +4,9 @@ import {useQuery} from '@tanstack/react-query';
 import {AlertTriangle, BarChart3, CheckCircle2, Globe, Loader2, Maximize2, Search, Shield, Zap} from 'lucide-react';
 import {Area, AreaChart, ResponsiveContainer} from 'recharts';
 import {pika} from '../api';
-import type {MetricsResponse, PublicMonitor} from '../types';
+import type {MonitorSparklinePoint, PublicMonitor} from '../types';
 import {cn, formatDateTime} from '../lib/utils';
-import {Card, CertificateBadge, MonitorTypeIcon, StatCard, StatusBadge, StatusSummary} from '../components/index';
+import {Card, CertificateBadge, ErrorState, MonitorTypeIcon, StatCard, StatusBadge, StatusSummary} from '../components/index';
 import {
     canSearchMonitorTarget,
     getCertificateHealth,
@@ -15,17 +15,21 @@ import {
     isMonitorAvailable,
     isMonitorHighLatency,
 } from '../domain/monitors/monitor-view-model';
+import PublicPageContainer from '../layouts/PublicPageContainer';
 
 /* ========================================== MonitorCard ========================================== */
 
 export type DisplayMode = 'avg' | 'max';
 
-const MiniChart = ({data, lastValue, id}: {
-    data: Array<{timestamp: number; value: number}>;
+const MiniChart = ({data, displayMode, lastValue, id}: {
+    data: MonitorSparklinePoint[];
+    displayMode: DisplayMode;
     lastValue?: number;
     id: string;
 }) => {
-    const chartData = useMemo(() => [...data].sort((a, b) => a.timestamp - b.timestamp), [data]);
+    const chartData = useMemo(() => data
+        .map(point => ({timestamp: point.timestamp, value: displayMode === 'avg' ? point.avg : point.max}))
+        .sort((a, b) => a.timestamp - b.timestamp), [data, displayMode]);
     if (chartData.length === 0) {
         return <div className="flex h-16 w-full items-center justify-center text-xs text-content-muted">暂无数据</div>;
     }
@@ -61,87 +65,13 @@ const MonitorCard = ({monitor, displayMode}: {
     monitor: PublicMonitor;
     displayMode: DisplayMode;
 }) => {
-    // 为每个监控卡片查询历史数据
-    const {data: historyData} = useQuery<MetricsResponse>({
-        queryKey: ['monitorHistory', monitor.id, '12h'], // 对应后端 60 秒步长
-        queryFn: async () => {
-            return pika.getMonitorHistory(monitor.id, {range: '1h'});
-        },
-        refetchInterval: 60000,
-        staleTime: 30000,
-        enabled: isMonitorAvailable(monitor),
-    });
-
-    // 转换时序数据为图表数据 - 使用统一格点对该对齐多探针数据
-    const chartData = useMemo(() => {
-        if (!historyData?.series || historyData.series.length === 0) {
-            return [];
-        }
-
-        const validSeries = historyData.series.filter(s => s.data && s.data.length > 0);
-        if (validSeries.length === 0) return [];
-
-        // 确定全局时间范围
-        let minTime = Infinity, maxTime = -Infinity;
-        validSeries.forEach(s => {
-            minTime = Math.min(minTime, s.data![0].timestamp);
-            maxTime = Math.max(maxTime, s.data![s.data!.length - 1].timestamp);
-        });
-
-        if (minTime >= maxTime) return [];
-
-        // 定义目标采集点 (1小时数据，建议 60 个采集点)
-        const maxPoints = 60;
-        const timeStep = (maxTime - minTime) / (maxPoints - 1);
-        const targetTimestamps: number[] = [];
-        for (let i = 0; i < maxPoints; i++) {
-            targetTimestamps.push(minTime + i * timeStep);
-        }
-
-        // 线性插值函数
-        const interpolate = (data: Array<{ timestamp: number; value: number }>, targetTime: number): number | null => {
-            if (data.length === 0) return null;
-            if (data.length === 1) return data[0].timestamp === targetTime ? data[0].value : null;
-            if (targetTime < data[0].timestamp || targetTime > data[data.length - 1].timestamp) return null;
-
-            let left = 0, right = data.length - 1;
-            while (right - left > 1) {
-                const mid = Math.floor((left + right) / 2);
-                if (data[mid].timestamp <= targetTime) left = mid;
-                else right = mid;
-            }
-            const leftPoint = data[left];
-            const rightPoint = data[right];
-            const ratio = (targetTime - leftPoint.timestamp) / (rightPoint.timestamp - leftPoint.timestamp);
-            return leftPoint.value + ratio * (rightPoint.value - leftPoint.value);
-        };
-
-        // 对每个目标时间点，计算所有探针的聚合值
-        return targetTimestamps.map(timestamp => {
-            const values: number[] = [];
-            validSeries.forEach(s => {
-                const val = interpolate(s.data!, timestamp);
-                if (val !== null) values.push(val);
-            });
-
-            if (values.length === 0) return { timestamp, value: 0 };
-
-            return {
-                timestamp,
-                value: displayMode === 'avg'
-                    ? Math.round(values.reduce((a, b) => a + b, 0) / values.length)
-                    : Math.max(...values),
-            };
-        });
-    }, [historyData, displayMode]);
-
     const displayValue = displayMode === 'avg' ? monitor.responseTime : monitor.responseTimeMax;
     const displayLabel = displayMode === 'avg' ? '平均延迟' : '最差节点延迟';
     const isAvailable = isMonitorAvailable(monitor);
     const publicTarget = getPublicMonitorTarget(monitor);
 
     return (
-        <Card className={'p-5'} interactive>
+        <Card className="h-full p-5" interactive>
             {/* 头部 */}
             <div className="flex justify-between items-start mb-4">
                 <div className="flex gap-3 flex-1 min-w-0">
@@ -207,7 +137,8 @@ const MonitorCard = ({monitor, displayMode}: {
 
             {/* 迷你走势图 */}
             <MiniChart
-                data={chartData}
+                data={monitor.sparkline ?? []}
+                displayMode={displayMode}
                 lastValue={displayValue}
                 id={monitor.id}
             />
@@ -244,7 +175,8 @@ const MonitorListEmpty = () => (
 interface Stats {
     total: number;
     online: number;
-    issues: number;
+    down: number;
+    unknown: number;
     avgLatency: number;
 }
 
@@ -254,7 +186,7 @@ const MonitorList = () => {
     const [searchKeyword, setSearchKeyword] = useState('');
     const [displayMode, setDisplayMode] = useState<DisplayMode>('max');
 
-    const {data: monitors = [], isLoading} = useQuery<PublicMonitor[]>({
+    const {data: monitors = [], isLoading, isError, refetch} = useQuery<PublicMonitor[]>({
         queryKey: ['publicMonitors'],
         queryFn: () => pika.listMonitors<PublicMonitor>(),
         refetchInterval: 30000,
@@ -280,12 +212,13 @@ const MonitorList = () => {
     const stats = useMemo<Stats>(() => {
         const total = monitors.length;
         const online = monitors.filter(isMonitorAvailable).length;
-        const issues = total - online;
+        const down = monitors.filter(monitor => monitor.status === 'down').length;
+        const unknown = total - online - down;
         const availableMonitors = monitors.filter(isMonitorAvailable);
         const avgLatency = availableMonitors.length > 0
             ? Math.round(availableMonitors.reduce((acc, curr) => acc + curr.responseTime, 0) / availableMonitors.length)
             : 0;
-        return {total, online, issues, avgLatency};
+        return {total, online, down, unknown, avgLatency};
     }, [monitors]);
 
     const publicSignals = useMemo(() => {
@@ -295,6 +228,15 @@ const MonitorList = () => {
         return {highLatency, certExpiring, certExpired};
     }, [monitors]);
 
+    const summaryStatus = useMemo(() => {
+        if (stats.total === 0) return 'unknown' as const;
+        if (stats.online === 0) return stats.down > 0 ? 'down' as const : 'unknown' as const;
+        if (stats.down > 0 || stats.unknown > 0 || publicSignals.highLatency > 0 || publicSignals.certExpiring > 0 || publicSignals.certExpired > 0) {
+            return 'degraded' as const;
+        }
+        return 'healthy' as const;
+    }, [publicSignals, stats]);
+
     if (isLoading) {
         return (
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
@@ -303,8 +245,16 @@ const MonitorList = () => {
         );
     }
 
+    if (isError) {
+        return (
+            <PublicPageContainer className="py-4 sm:py-8">
+                <ErrorState message="服务状态接口暂时不可用，页面不会把请求失败误判为暂无监控数据。" onRetry={() => void refetch()}/>
+            </PublicPageContainer>
+        );
+    }
+
     return (
-        <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-4 sm:space-y-6">
+        <PublicPageContainer className="space-y-4 py-4 sm:space-y-6 sm:py-8">
             {/* 统计卡片 */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
                 <StatCard
@@ -320,15 +270,15 @@ const MonitorList = () => {
                     tone="success"
                 />
                 <StatCard
-                    label="异常服务"
-                    value={stats.issues}
+                    label="不可用服务"
+                    value={stats.down}
                     icon={AlertTriangle}
-                    tone={stats.issues > 0 ? 'danger' : 'neutral'}
+                    tone={stats.down > 0 ? 'danger' : stats.unknown > 0 ? 'warning' : 'neutral'}
                 />
                 <StatCard
                     label="全局平均延迟"
-                    value={stats.avgLatency}
-                    unit="ms"
+                    value={stats.online > 0 ? stats.avgLatency : '—'}
+                    unit={stats.online > 0 ? 'ms' : undefined}
                     icon={Zap}
                     tone="accent"
                 />
@@ -339,13 +289,15 @@ const MonitorList = () => {
                 current={stats.online}
                 total={stats.total}
                 currentLabel="项服务当前可用"
-                status={stats.issues > 0 ? 'degraded' : 'healthy'}
+                status={summaryStatus}
                 signals={[
-                    stats.issues > 0 && {label: `${stats.issues} 项暂不可用`, status: 'down'},
+                    stats.total === 0 && {label: '暂无服务状态数据', status: 'unknown'},
+                    stats.down > 0 && {label: `${stats.down} 项明确不可用`, status: 'down'},
+                    stats.unknown > 0 && {label: `${stats.unknown} 项状态未知`, status: 'unknown'},
                     publicSignals.highLatency > 0 && {label: `${publicSignals.highLatency} 项响应较慢`, status: 'degraded'},
                     publicSignals.certExpiring > 0 && {label: `${publicSignals.certExpiring} 张证书即将到期`, status: 'degraded'},
                     publicSignals.certExpired > 0 && {label: `${publicSignals.certExpired} 张证书已过期`, status: 'down'},
-                    stats.issues === 0 && publicSignals.highLatency === 0 && publicSignals.certExpiring === 0 && publicSignals.certExpired === 0 && {label: '当前服务运行平稳', status: 'healthy'},
+                    stats.total > 0 && stats.down === 0 && stats.unknown === 0 && publicSignals.highLatency === 0 && publicSignals.certExpiring === 0 && publicSignals.certExpired === 0 && {label: '当前服务运行平稳', status: 'healthy'},
                 ]}
                 refreshLabel="状态每 30 秒刷新"
             />
@@ -357,7 +309,9 @@ const MonitorList = () => {
                     <div className="flex items-center gap-1 rounded-control border border-line bg-panel-muted p-1">
                         <span className="text-xs text-content-secondary px-2 font-mono">卡片指标:</span>
                         <button
+                            type="button"
                             onClick={() => setDisplayMode('avg')}
+                            aria-pressed={displayMode === 'avg'}
                             className={cn(
                                 "px-3 py-1.5 text-xs font-medium rounded transition-all flex items-center gap-1 font-mono cursor-pointer",
                                 displayMode === 'avg'
@@ -368,7 +322,9 @@ const MonitorList = () => {
                             <BarChart3 className="w-3 h-3"/> 平均
                         </button>
                         <button
+                            type="button"
                             onClick={() => setDisplayMode('max')}
+                            aria-pressed={displayMode === 'max'}
                             className={cn(
                                 "px-3 py-1.5 text-xs font-medium rounded transition-all flex items-center gap-1 font-mono cursor-pointer",
                                 displayMode === 'max'
@@ -385,7 +341,9 @@ const MonitorList = () => {
                 <div className="relative w-full md:w-64">
                     <div className="relative flex items-center rounded-control border border-line bg-panel focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20">
                         <Search className="ml-3 h-4 w-4 text-content-muted"/>
+                        <label htmlFor="monitor-search" className="sr-only">搜索服务名称或公开地址</label>
                         <input
+                            id="monitor-search"
                             type="text"
                             placeholder="搜索服务名称或地址..."
                             value={searchKeyword}
@@ -402,7 +360,7 @@ const MonitorList = () => {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 md:gap-4 gap-2">
                     {filteredMonitors.map(monitor => (
-                        <Link key={monitor.id} to={`/monitors/${monitor.id}`}>
+                        <Link key={monitor.id} to={`/monitors/${monitor.id}`} className="block h-full">
                             <MonitorCard
                                 monitor={monitor}
                                 displayMode={displayMode}
@@ -411,7 +369,7 @@ const MonitorList = () => {
                     ))}
                 </div>
             )}
-        </div>
+        </PublicPageContainer>
     );
 };
 

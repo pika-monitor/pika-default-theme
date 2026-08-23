@@ -7,6 +7,7 @@ const ServerList = lazy(() => import('./pages/ServerList'));
 const ServerDetail = lazy(() => import('./pages/ServerDetail'));
 const MonitorList = lazy(() => import('./pages/MonitorList'));
 const MonitorDetail = lazy(() => import('./pages/MonitorDetail'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 export default function PortalApp() {
     return (
@@ -19,6 +20,7 @@ export default function PortalApp() {
                             <Route path="/servers/:id" element={<ServerDetail/>}/>
                             <Route path="/monitors" element={<MonitorList/>}/>
                             <Route path="/monitors/:id" element={<MonitorDetail/>}/>
+                            <Route path="*" element={<NotFound/>}/>
                         </Route>
                     </Routes>
                 </Suspense>

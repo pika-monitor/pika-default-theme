@@ -3,7 +3,7 @@ import {useNavigate, useParams} from 'react-router-dom';
 import {useQuery} from '@tanstack/react-query';
 import {Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts';
 import {AlertCircle, ArrowLeft, ChevronDown, ChevronUp, Clock, MapPin, RotateCcw, ShieldCheck} from 'lucide-react';
-import {pika} from '../api';
+import {PikaAPIError, pika} from '../api';
 import type {AgentMonitorStat, MetricsResponse, PublicMonitor} from '../types';
 import {AGENT_COLORS, MONITOR_TIME_RANGE_OPTIONS} from '../constants';
 import {cn, formatChartTime, formatDateTime, formatTime} from '../lib/utils';
@@ -14,12 +14,14 @@ import {
     ChartPlaceholder,
     CustomTooltip,
     EmptyState,
+    ErrorState,
     LoadingSpinner,
     MetricItem,
     StatusBadge,
     TimeRangeSelector
 } from '../components/index';
 import {getPublicMonitorTarget, isMonitorAvailable} from '../domain/monitors/monitor-view-model';
+import PublicPageContainer from '../layouts/PublicPageContainer';
 
 /* ========================================== MonitorHero ========================================== */
 
@@ -339,10 +341,12 @@ const CustomLegend = ({onClick, selectedAgents, allAgents, colors, collapsed}: a
                 const color = colors[index];
 
                 return (
-                    <div
+                    <button
+                        type="button"
                         key={agent.id}
                         onClick={() => onClick(agent.id)}
-                        className="flex items-center gap-2 cursor-pointer transition-opacity"
+                        aria-pressed={isSelected}
+                        className="flex cursor-pointer items-center gap-2 rounded-control px-1 py-0.5 transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                         style={{
                             opacity: isSelected ? 1 : 0.4,
                         }}
@@ -365,7 +369,7 @@ const CustomLegend = ({onClick, selectedAgents, allAgents, colors, collapsed}: a
                         >
                             {agent.name}
                         </span>
-                    </div>
+                    </button>
                 );
             })}
         </div>
@@ -389,7 +393,7 @@ const ResponseTimeChart = ({monitorId, monitorStats, available}: ResponseTimeCha
     const rangeMs = customStart !== undefined && customEnd !== undefined ? customEnd - customStart : undefined;
 
     // 获取历史数据
-    const {data: historyData} = useQuery<MetricsResponse>({
+    const {data: historyData, isError: isHistoryError, refetch: refetchHistory} = useQuery<MetricsResponse>({
         queryKey: ['monitorHistory', monitorId, timeRange, customStart, customEnd],
         queryFn: async () => {
             if (!monitorId) throw new Error('Monitor ID is required');
@@ -546,6 +550,18 @@ const ResponseTimeChart = ({monitorId, monitorStats, available}: ResponseTimeCha
         );
     }
 
+    if (isHistoryError) {
+        return (
+            <Card className="p-6">
+                <div>
+                    <h3 className="text-lg font-semibold text-content">响应时间趋势</h3>
+                    <p className="mt-1 font-mono text-xs text-content-secondary">监控各探针的响应时间变化</p>
+                </div>
+                <ErrorState className="mt-6 min-h-[220px]" message="响应时间历史数据加载失败。" onRetry={() => void refetchHistory()}/>
+            </Card>
+        );
+    }
+
     return (
         <Card className={'p-6'}>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
@@ -575,7 +591,9 @@ const ResponseTimeChart = ({monitorId, monitorStats, available}: ResponseTimeCha
                     </div>
                     {hasUnselected && (
                         <button
+                            type="button"
                             onClick={handleSelectAll}
+                            aria-label="恢复显示全部探针"
                             className="p-1.5 rounded
                                 text-content-muted
                                 hover:text-brand
@@ -673,7 +691,9 @@ const ResponseTimeChart = ({monitorId, monitorStats, available}: ResponseTimeCha
                     {isMobile && availableAgents.length > 0 && (
                         <div className="pt-4">
                             <button
+                                type="button"
                                 onClick={toggleLegend}
+                                aria-expanded={!legendCollapsed}
                                 className="w-full flex items-center justify-center gap-2 py-2 text-xs text-content-secondary hover:text-brand"
                             >
                                 <span>{legendCollapsed ? '显示图例' : '收起图例'}</span>
@@ -710,7 +730,7 @@ const MonitorDetail = () => {
     const {id} = useParams<{id: string}>();
 
     // 获取监控详情（聚合数据）
-    const {data: monitorDetail, isLoading} = useQuery<PublicMonitor>({
+    const {data: monitorDetail, isLoading, isError, error, refetch} = useQuery<PublicMonitor>({
         queryKey: ['monitorDetail', id],
         queryFn: async () => {
             if (!id) throw new Error('Monitor ID is required');
@@ -721,7 +741,7 @@ const MonitorDetail = () => {
     });
 
     // 获取各探针的统计数据
-    const {data: monitorStats = []} = useQuery<AgentMonitorStat[]>({
+    const {data: monitorStats = [], isError: isStatsError, refetch: refetchStats} = useQuery<AgentMonitorStat[]>({
         queryKey: ['monitorAgentStats', id],
         queryFn: async () => {
             if (!id) return [];
@@ -735,13 +755,24 @@ const MonitorDetail = () => {
         return <LoadingSpinner/>;
     }
 
+    if (isError) {
+        if (error instanceof PikaAPIError && error.status === 404) {
+            return <EmptyState message="服务监控不存在或当前不可见"/>;
+        }
+        return (
+            <PublicPageContainer className="py-4 sm:py-6">
+                <ErrorState message="服务详情接口暂时不可用。" onRetry={() => void refetch()}/>
+            </PublicPageContainer>
+        );
+    }
+
     if (!monitorDetail) {
         return <EmptyState/>;
     }
 
     return (
-        <div className="bg-page min-h-screen">
-            <div className="mx-auto flex max-w-7xl flex-col px-4 pb-10 pt-4 sm:pt-6 sm:px-6 lg:px-8">
+        <div className="bg-page">
+            <PublicPageContainer className="flex flex-col pb-10 pt-4 sm:pt-6">
                 {/* 头部区域 */}
                 <MonitorHero
                     monitor={monitorDetail}
@@ -749,7 +780,7 @@ const MonitorDetail = () => {
                 />
 
                 {/* 主内容区 */}
-                <main className="flex-1 py-6 sm:py-8 lg:py-10 space-y-6 sm:space-y-8 lg:space-y-10">
+                <main className="mt-6 flex-1 space-y-6 sm:space-y-8 lg:space-y-10">
                     {/* 响应时间趋势图表 */}
                     <ResponseTimeChart
                         monitorId={id!}
@@ -758,12 +789,16 @@ const MonitorDetail = () => {
                     />
 
                     {/* 各探针详细数据 */}
-                    <AgentStatsTable
-                        monitorStats={monitorStats}
-                        monitorType={monitorDetail.type}
-                    />
+                    {isStatsError ? (
+                        <ErrorState message="探针监控详情加载失败。" onRetry={() => void refetchStats()}/>
+                    ) : (
+                        <AgentStatsTable
+                            monitorStats={monitorStats}
+                            monitorType={monitorDetail.type}
+                        />
+                    )}
                 </main>
-            </div>
+            </PublicPageContainer>
         </div>
     );
 };

@@ -20,14 +20,15 @@ export const useAgentQuery = (agentId?: string) => {
         queryFn: () => pika.getAgent<Agent>(agentId!),
         enabled: !!agentId,
         staleTime: 60000,
+        refetchInterval: 5000,
     });
 };
 
-export const useLatestMetricsQuery = (agentId?: string, intervalMs: number = 5000) => {
+export const useLatestMetricsQuery = (agentId?: string, intervalMs: number = 5000, enabled = true) => {
     return useQuery({
         queryKey: ['agent', agentId, 'metrics', 'latest'],
         queryFn: () => pika.getLatestMetrics<LatestMetrics>(agentId!),
-        enabled: !!agentId,
+        enabled: !!agentId && enabled,
         refetchInterval: intervalMs > 0 ? intervalMs : false,
     });
 };

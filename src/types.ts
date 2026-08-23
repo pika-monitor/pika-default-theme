@@ -230,6 +230,13 @@ export interface PublicMonitor {
     certDaysLeft: number;
     agentStats: {up: number; down: number; unknown: number};
     lastCheckTime: number;
+    sparkline?: MonitorSparklinePoint[];
+}
+
+export interface MonitorSparklinePoint {
+    timestamp: number;
+    avg: number;
+    max: number;
 }
 
 export interface AgentMonitorStat {

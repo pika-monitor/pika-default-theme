@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useId, useState} from 'react';
 import type {TimeRangeOption} from '../../types';
 import {cn} from '../../lib/utils';
 
@@ -28,6 +28,7 @@ const toDateTimeLocal = (timestamp: number): string => {
 const controlClass = 'rounded-control border border-line bg-panel px-3 py-1.5 font-mono text-xs font-medium text-content-secondary transition-colors hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20';
 
 export const TimeRangeSelector = ({value, onChange, options, enableCustom = false, customRange, onCustomRangeApply, className}: TimeRangeSelectorProps) => {
+    const idPrefix = useId();
     const [customStart, setCustomStart] = useState('');
     const [customEnd, setCustomEnd] = useState('');
 
@@ -43,16 +44,19 @@ export const TimeRangeSelector = ({value, onChange, options, enableCustom = fals
 
     return (
         <div className={cn('flex flex-wrap items-center gap-2', className)}>
-            <select value={showCustomOption ? 'custom' : value} onChange={(event) => event.target.value !== 'custom' && onChange(event.target.value)} className={controlClass}>
+            <label htmlFor={`${idPrefix}-range`} className="sr-only">时间范围</label>
+            <select id={`${idPrefix}-range`} aria-label="时间范围" value={showCustomOption ? 'custom' : value} onChange={(event) => event.target.value !== 'custom' && onChange(event.target.value)} className={controlClass}>
                 {showCustomOption && <option value="custom" disabled>自定义</option>}
                 {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
             {enableCustom && (
                 <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono text-xs font-medium text-content-secondary">自定义</span>
-                    <input type="datetime-local" value={customStart} onChange={(event) => setCustomStart(event.target.value)} className={cn(controlClass, 'px-2 py-1')}/>
+                    <label htmlFor={`${idPrefix}-start`} className="sr-only">开始时间</label>
+                    <input id={`${idPrefix}-start`} aria-label="开始时间" type="datetime-local" value={customStart} onChange={(event) => setCustomStart(event.target.value)} className={cn(controlClass, 'px-2 py-1')}/>
                     <span className="font-mono text-xs text-content-muted">至</span>
-                    <input type="datetime-local" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} className={cn(controlClass, 'px-2 py-1')}/>
+                    <label htmlFor={`${idPrefix}-end`} className="sr-only">结束时间</label>
+                    <input id={`${idPrefix}-end`} aria-label="结束时间" type="datetime-local" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} className={cn(controlClass, 'px-2 py-1')}/>
                     <button
                         type="button"
                         disabled={!canApply}
