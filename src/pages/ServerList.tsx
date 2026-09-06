@@ -273,11 +273,10 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
 
 /* ========================================== ServerList 本地组件 ========================================== */
 
-const NetworkStatCard = ({uploadRate, downloadRate, uploadTotal, downloadTotal}: {
+const NetworkStatCard = ({uploadRate, downloadRate, trafficTotal}: {
     uploadRate: number;
     downloadRate: number;
-    uploadTotal: number;
-    downloadTotal: number;
+    trafficTotal: number;
 }) => (
     <div className="relative overflow-hidden rounded-card border border-brand/20 bg-brand-muted/40 p-4 text-brand shadow-card backdrop-blur-md sm:p-5">
         <Network className="absolute -bottom-4 -right-4 h-20 w-20 -rotate-12 opacity-10 sm:h-24 sm:w-24"/>
@@ -288,12 +287,15 @@ const NetworkStatCard = ({uploadRate, downloadRate, uploadTotal, downloadTotal}:
                     <div className="flex items-center gap-1.5 sm:gap-2">
                         <ArrowUp className="h-3 w-3 flex-shrink-0 text-brand"/>
                         <span className="truncate text-content">{formatSpeed(uploadRate)}</span>
-                        <span className="hidden text-content-secondary sm:inline">({formatBytes(uploadTotal)})</span>
                     </div>
                     <div className="flex items-center gap-1.5 sm:gap-2">
                         <ArrowDown className="h-3 w-3 flex-shrink-0 text-success"/>
                         <span className="truncate text-content">{formatSpeed(downloadRate)}</span>
-                        <span className="hidden text-content-secondary sm:inline">({formatBytes(downloadTotal)})</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 sm:gap-2 pt-0.5">
+                        <Activity className="h-3 w-3 flex-shrink-0 text-content-muted"/>
+                        <span className="text-content-secondary">本期流量</span>
+                        <span className="truncate text-content">{formatBytes(trafficTotal, 1)}</span>
                     </div>
                 </div>
             </div>
@@ -378,15 +380,17 @@ const ServerList = () => {
         // 计算网络统计
         let totalUploadRate = 0;
         let totalDownloadRate = 0;
-        let totalUploadTotal = 0;
-        let totalDownloadTotal = 0;
+        let totalTrafficUsed = 0;
 
         displayAgents.forEach(agent => {
+            // 速率来自实时指标，只统计在线设备
             if (isAgentOnline(agent) && agent.metrics?.network) {
                 totalUploadRate += agent.metrics.network.totalBytesSentRate || 0;
                 totalDownloadRate += agent.metrics.network.totalBytesRecvRate || 0;
-                totalUploadTotal += agent.metrics.network.totalBytesSentTotal || 0;
-                totalDownloadTotal += agent.metrics.network.totalBytesRecvTotal || 0;
+            }
+            // 累计流量使用持久化的 trafficStats：内核计数器随重启清零，不能作为总流量口径
+            if (agent.trafficStats?.enabled) {
+                totalTrafficUsed += agent.trafficStats.used || 0;
             }
         });
 
@@ -396,8 +400,7 @@ const ServerList = () => {
             offline,
             uploadRate: totalUploadRate,
             downloadRate: totalDownloadRate,
-            uploadTotal: totalUploadTotal,
-            downloadTotal: totalDownloadTotal
+            trafficTotal: totalTrafficUsed
         };
     }, [displayAgents]);
 
@@ -466,8 +469,7 @@ const ServerList = () => {
                 <NetworkStatCard
                     uploadRate={stats?.uploadRate}
                     downloadRate={stats?.downloadRate}
-                    uploadTotal={stats?.uploadTotal}
-                    downloadTotal={stats?.downloadTotal}
+                    trafficTotal={stats?.trafficTotal}
                 />
             </div>
 
