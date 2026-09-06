@@ -170,7 +170,7 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
                                 value={memoryUsage}
                                 label="RAM"
                                 icon={MemoryStick}
-                                detail={`${formatBytes(memoryUsed, 0)}/${formatBytes(memoryTotal, 0)}`}
+                                detail={`${formatBytes(memoryUsed, 0, 1024)}/${formatBytes(memoryTotal, 0, 1024)}`}
                             />
                             <MetricBar
                                 type="disk"
@@ -273,10 +273,11 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
 
 /* ========================================== ServerList 本地组件 ========================================== */
 
-const NetworkStatCard = ({uploadRate, downloadRate, trafficTotal}: {
+const NetworkStatCard = ({uploadRate, downloadRate, uploadTotal, downloadTotal}: {
     uploadRate: number;
     downloadRate: number;
-    trafficTotal: number;
+    uploadTotal: number;
+    downloadTotal: number;
 }) => (
     <div className="relative overflow-hidden rounded-card border border-brand/20 bg-brand-muted/40 p-4 text-brand shadow-card backdrop-blur-md sm:p-5">
         <Network className="absolute -bottom-4 -right-4 h-20 w-20 -rotate-12 opacity-10 sm:h-24 sm:w-24"/>
@@ -287,15 +288,12 @@ const NetworkStatCard = ({uploadRate, downloadRate, trafficTotal}: {
                     <div className="flex items-center gap-1.5 sm:gap-2">
                         <ArrowUp className="h-3 w-3 flex-shrink-0 text-brand"/>
                         <span className="truncate text-content">{formatSpeed(uploadRate)}</span>
+                        <span className="hidden text-content-secondary sm:inline">({formatBytes(uploadTotal)})</span>
                     </div>
                     <div className="flex items-center gap-1.5 sm:gap-2">
                         <ArrowDown className="h-3 w-3 flex-shrink-0 text-success"/>
                         <span className="truncate text-content">{formatSpeed(downloadRate)}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 sm:gap-2 pt-0.5">
-                        <Activity className="h-3 w-3 flex-shrink-0 text-content-muted"/>
-                        <span className="text-content-secondary">本期流量</span>
-                        <span className="truncate text-content">{formatBytes(trafficTotal, 1)}</span>
+                        <span className="hidden text-content-secondary sm:inline">({formatBytes(downloadTotal)})</span>
                     </div>
                 </div>
             </div>
@@ -380,7 +378,8 @@ const ServerList = () => {
         // 计算网络统计
         let totalUploadRate = 0;
         let totalDownloadRate = 0;
-        let totalTrafficUsed = 0;
+        let totalUploadTotal = 0;
+        let totalDownloadTotal = 0;
 
         displayAgents.forEach(agent => {
             // 速率来自实时指标，只统计在线设备
@@ -388,9 +387,24 @@ const ServerList = () => {
                 totalUploadRate += agent.metrics.network.totalBytesSentRate || 0;
                 totalDownloadRate += agent.metrics.network.totalBytesRecvRate || 0;
             }
-            // 累计流量使用持久化的 trafficStats：内核计数器随重启清零，不能作为总流量口径
-            if (agent.trafficStats?.enabled) {
-                totalTrafficUsed += agent.trafficStats.used || 0;
+            // 累计流量使用持久化的 trafficStats（内核计数器随重启清零，不能作为总流量口径）。
+            // trafficStats 只记录总量，both 类型按开机计数器的收发比例拆分到上下行。
+            const traffic = agent.trafficStats;
+            if (traffic?.enabled && traffic.used > 0) {
+                const bootSent = agent.metrics?.network?.totalBytesSentTotal || 0;
+                const bootRecv = agent.metrics?.network?.totalBytesRecvTotal || 0;
+                let uploadShare: number;
+                if (traffic.type === 'send') {
+                    uploadShare = 1;
+                } else if (traffic.type === 'recv') {
+                    uploadShare = 0;
+                } else if (bootSent + bootRecv > 0) {
+                    uploadShare = bootSent / (bootSent + bootRecv);
+                } else {
+                    uploadShare = 0.5;
+                }
+                totalUploadTotal += traffic.used * uploadShare;
+                totalDownloadTotal += traffic.used * (1 - uploadShare);
             }
         });
 
@@ -400,7 +414,8 @@ const ServerList = () => {
             offline,
             uploadRate: totalUploadRate,
             downloadRate: totalDownloadRate,
-            trafficTotal: totalTrafficUsed
+            uploadTotal: totalUploadTotal,
+            downloadTotal: totalDownloadTotal
         };
     }, [displayAgents]);
 
@@ -469,7 +484,8 @@ const ServerList = () => {
                 <NetworkStatCard
                     uploadRate={stats?.uploadRate}
                     downloadRate={stats?.downloadRate}
-                    trafficTotal={stats?.trafficTotal}
+                    uploadTotal={stats?.uploadTotal}
+                    downloadTotal={stats?.downloadTotal}
                 />
             </div>
 
@@ -635,7 +651,7 @@ const ServerList = () => {
                                                         value={memoryUsage}
                                                         label="RAM"
                                                         icon={MemoryStick}
-                                                        detail={`${formatBytes(memoryUsed, 1)}/${formatBytes(memoryTotal, 1)}`}
+                                                        detail={`${formatBytes(memoryUsed, 1, 1024)}/${formatBytes(memoryTotal, 1, 1024)}`}
                                                     />
                                                     <MetricBar
                                                         type="disk"
