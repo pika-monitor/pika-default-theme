@@ -301,11 +301,11 @@ const SystemInfoSection = ({agent, latestMetrics}: SystemInfoSectionProps) => {
             metrics: [
                 {
                     label: '已用 / 总量',
-                    value: `${formatBytes(latestMetrics.memory?.used)} / ${formatBytes(latestMetrics.memory?.total)}`
+                    value: `${formatBytes(latestMetrics.memory?.used, 2, 1024)} / ${formatBytes(latestMetrics.memory?.total, 2, 1024)}`
                 },
                 {
                     label: 'Swap 已用',
-                    value: `${formatBytes(latestMetrics.memory?.swapUsed)} / ${formatBytes(latestMetrics.memory?.swapTotal)}`
+                    value: `${formatBytes(latestMetrics.memory?.swapUsed, 2, 1024)} / ${formatBytes(latestMetrics.memory?.swapTotal, 2, 1024)}`
                 },
             ],
         });
@@ -496,7 +496,7 @@ const GpuMonitorSection = ({latestMetrics}: {latestMetrics: LatestMetrics | null
                         <div className="space-y-2 text-xs">
                             {[
                                 ['温度', `${gpu.temperature?.toFixed(1)}°C`],
-                                ['显存', `${formatBytes(gpu.memoryUsed)} / ${formatBytes(gpu.memoryTotal)}`],
+                                ['显存', `${formatBytes(gpu.memoryUsed, 2, 1024)} / ${formatBytes(gpu.memoryTotal, 2, 1024)}`],
                                 ['功耗', `${gpu.powerUsage?.toFixed(1)}W`],
                                 ['风扇转速', `${gpu.fanSpeed?.toFixed(0)}%`],
                             ].map(([label, value]) => (

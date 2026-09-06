@@ -5,18 +5,20 @@ export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
 
-export const formatBytes = (value: number | undefined | null, precision = 2): string => {
+// base 缺省 1000（十进制）：网络流量与运营商计费、硬盘标称口径一致；
+// 内存按二进制寻址，调用时显式传 1024 才能还原内存条标称容量
+export const formatBytes = (value: number | undefined | null, precision = 2, base = 1000): string => {
     if (value === undefined || value === null || !Number.isFinite(value) || value <= 0) return '0 B';
     const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-    const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
-    return `${(value / 1024 ** index).toFixed(precision)} ${units[index]}`;
+    const index = Math.min(Math.floor(Math.log(value) / Math.log(base)), units.length - 1);
+    return `${(value / base ** index).toFixed(precision)} ${units[index]}`;
 };
 
 export const formatSpeed = (bytesPerSecond: number): string => {
     if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return '0 B/s';
-    const units = ['B/s', 'K/s', 'M/s', 'G/s', 'T/s'];
-    const index = Math.min(Math.floor(Math.log(bytesPerSecond) / Math.log(1024)), units.length - 1);
-    const value = bytesPerSecond / 1024 ** index;
+    const units = ['B/s', 'K/s', 'M/s', 'G/s', 'T/s', 'P/s'];
+    const index = Math.min(Math.floor(Math.log(bytesPerSecond) / Math.log(1000)), units.length - 1);
+    const value = bytesPerSecond / 1000 ** index;
     const decimals = value >= 100 ? 0 : value >= 10 ? 1 : 2;
     return `${value.toFixed(decimals)} ${units[index]}`;
 };
