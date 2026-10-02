@@ -1,4 +1,4 @@
-import {memo, type ReactNode, useEffect, useMemo, useState} from 'react';
+import {memo, type ReactNode, useEffect, useMemo, useRef, useState} from 'react';
 import {useNavigate, useParams} from 'react-router-dom';
 import {Area, AreaChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts';
 import {
@@ -56,11 +56,20 @@ import {
     TimeRangeSelector
 } from '../components/index';
 import {isAgentOnline} from '../domain/agents/agent-view-model';
+import {
+    buildGpuChartData, buildMonitorChartData, formatMetricNumber, getGpuSeries,
+    getMonitorSeries, reconcileMonitorSelection,
+} from '../domain/agents/server-chart-view-model';
 import PublicPageContainer from '../layouts/PublicPageContainer';
 
 /* ========================================== 共享工具 ========================================== */
 
 const toMB = (bytes: number) => Number((bytes / 1024 / 1024).toFixed(2));
+
+const formatMetricBytes = (value: number | undefined | null, decimals = 2, base = 1000): string => (
+    typeof value === 'number' && Number.isFinite(value) ? formatBytes(value, decimals, base) : '—'
+);
+
 
 /* ========================================== ChartContainer ========================================== */
 
@@ -114,7 +123,7 @@ const ServerHero = ({agent, latestMetrics, onBack}: ServerHeroProps) => {
     const lastSeenDisplay = agent ? formatDateTime(agent.lastSeenAt) : '-';
 
     const networkSummary = latestMetrics?.network
-        ? `${formatBytes(latestMetrics.network.totalBytesSentTotal)} ↑ / ${formatBytes(
+        ? `${formatMetricBytes(latestMetrics.network.totalBytesSentTotal)} ↑ / ${formatMetricBytes(
             latestMetrics.network.totalBytesRecvTotal,
         )} ↓`
         : '—';
@@ -122,7 +131,7 @@ const ServerHero = ({agent, latestMetrics, onBack}: ServerHeroProps) => {
     const heroStats = [
         {label: '运行系统', value: platformDisplay || '-'},
         {label: '硬件架构', value: architectureDisplay || '-'},
-        {label: '系统进程', value: latestMetrics?.host?.procs || '-'},
+        {label: '系统进程', value: latestMetrics?.host?.procs ?? '—'},
         {label: '运行时长', value: uptimeDisplay},
     ];
 
@@ -264,7 +273,7 @@ const SystemInfoSection = ({agent, latestMetrics}: SystemInfoSectionProps) => {
     const lastSeenDisplay = agent ? formatDateTime(agent.lastSeenAt) : '-';
 
     const networkSummary = latestMetrics?.network
-        ? `${formatBytes(latestMetrics.network.totalBytesSentTotal)} ↑ / ${formatBytes(
+        ? `${formatMetricBytes(latestMetrics.network.totalBytesSentTotal)} ↑ / ${formatMetricBytes(
             latestMetrics.network.totalBytesRecvTotal,
         )} ↓`
         : '—';
@@ -275,7 +284,7 @@ const SystemInfoSection = ({agent, latestMetrics}: SystemInfoSectionProps) => {
         {label: '最近心跳', value: lastSeenDisplay},
         {label: '进程数', value: latestMetrics?.host?.procs ?? '-'},
         {label: '网络累计', value: networkSummary},
-        {label: 'Load', value: `${latestMetrics?.host?.load1?.toFixed(2)} / ${latestMetrics?.host?.load5?.toFixed(2)} / ${latestMetrics?.host?.load15?.toFixed(2)}`},
+        {label: 'Load', value: [latestMetrics?.host?.load1, latestMetrics?.host?.load5, latestMetrics?.host?.load15].map(value => formatMetricNumber(value, 2)).join(' / ')},
     ];
 
     // 快照卡片
@@ -286,10 +295,10 @@ const SystemInfoSection = ({agent, latestMetrics}: SystemInfoSectionProps) => {
             key: 'cpu',
             icon: Cpu,
             title: 'CPU 使用',
-            usagePercent: `${formatPercentValue(latestMetrics.cpu?.usagePercent)}%`,
+            usagePercent: formatMetricNumber(latestMetrics.cpu?.usagePercent, 1, '%'),
             accent: 'blue',
             metrics: [
-                {label: '当前使用', value: `${formatPercentValue(latestMetrics.cpu?.usagePercent)}%`},
+                {label: '当前使用', value: formatMetricNumber(latestMetrics.cpu?.usagePercent, 1, '%')},
             ],
         });
 
@@ -297,16 +306,16 @@ const SystemInfoSection = ({agent, latestMetrics}: SystemInfoSectionProps) => {
             key: 'memory',
             icon: MemoryStick,
             title: '内存使用',
-            usagePercent: `${formatPercentValue(latestMetrics.memory?.usagePercent)}%`,
+            usagePercent: formatMetricNumber(latestMetrics.memory?.usagePercent, 1, '%'),
             accent: 'emerald',
             metrics: [
                 {
                     label: '已用 / 总量',
-                    value: `${formatBytes(latestMetrics.memory?.used, 2, 1024)} / ${formatBytes(latestMetrics.memory?.total, 2, 1024)}`
+                    value: `${formatMetricBytes(latestMetrics.memory?.used, 2, 1024)} / ${formatMetricBytes(latestMetrics.memory?.total, 2, 1024)}`
                 },
                 {
                     label: 'Swap 已用',
-                    value: `${formatBytes(latestMetrics.memory?.swapUsed, 2, 1024)} / ${formatBytes(latestMetrics.memory?.swapTotal, 2, 1024)}`
+                    value: `${formatMetricBytes(latestMetrics.memory?.swapUsed, 2, 1024)} / ${formatMetricBytes(latestMetrics.memory?.swapTotal, 2, 1024)}`
                 },
             ],
         });
@@ -316,13 +325,13 @@ const SystemInfoSection = ({agent, latestMetrics}: SystemInfoSectionProps) => {
             icon: HardDrive,
             title: '磁盘使用',
             usagePercent: latestMetrics.disk
-                ? `${formatPercentValue(latestMetrics.disk.usagePercent)}%`
+                ? formatMetricNumber(latestMetrics.disk.usagePercent, 1, '%')
                 : '—',
             accent: 'purple',
             metrics: [
                 {
                     label: '已用 / 总量',
-                    value: `${formatBytes(latestMetrics.disk?.used, 1)} / ${formatBytes(latestMetrics.disk?.total, 1)}`
+                    value: `${formatMetricBytes(latestMetrics.disk?.used, 1)} / ${formatMetricBytes(latestMetrics.disk?.total, 1)}`
                 },
                 {label: '磁盘数量', value: latestMetrics.disk?.totalDisks ?? '-'},
             ],
@@ -332,13 +341,13 @@ const SystemInfoSection = ({agent, latestMetrics}: SystemInfoSectionProps) => {
         const networkMetrics = [
             {
                 label: '上行 / 下行',
-                value: `${formatBytes(latestMetrics.network?.totalBytesSentRate, 1)}/s ↑ / ${formatBytes(
+                value: `${formatMetricBytes(latestMetrics.network?.totalBytesSentRate, 1)}/s ↑ / ${formatMetricBytes(
                     latestMetrics.network?.totalBytesRecvRate, 1,
                 )}/s ↓`,
             },
             {
                 label: '网络累计',
-                value: `${formatBytes(latestMetrics.network?.totalBytesSentTotal, 1)} ↑ / ${formatBytes(
+                value: `${formatMetricBytes(latestMetrics.network?.totalBytesSentTotal, 1)} ↑ / ${formatMetricBytes(
                     latestMetrics.network?.totalBytesRecvTotal, 1,
                 )} ↓`,
             },
@@ -366,7 +375,7 @@ const SystemInfoSection = ({agent, latestMetrics}: SystemInfoSectionProps) => {
             icon: Network,
             title: '网络流量',
             usagePercent: latestMetrics.network
-                ? `${formatBytes(latestMetrics.network.totalBytesSentRate)}/s`
+                ? `${formatMetricBytes(latestMetrics.network.totalBytesSentRate)}/s`
                 : '—',
             accent: 'amber',
             metrics: networkMetrics,
@@ -492,14 +501,14 @@ const GpuMonitorSection = ({latestMetrics}: {latestMetrics: LatestMetrics | null
                                     <p className="text-xs text-content-secondary">{gpu.name}</p>
                                 </div>
                             </div>
-                            <span className="text-2xl font-bold text-chart-4">{gpu.utilization?.toFixed(1) ?? 0}%</span>
+                            <span className="text-2xl font-bold text-chart-4">{formatMetricNumber(gpu.utilization, 1, '%')}</span>
                         </div>
                         <div className="space-y-2 text-xs">
                             {[
-                                ['温度', `${gpu.temperature?.toFixed(1)}°C`],
-                                ['显存', `${formatBytes(gpu.memoryUsed, 2, 1024)} / ${formatBytes(gpu.memoryTotal, 2, 1024)}`],
-                                ['功耗', `${gpu.powerUsage?.toFixed(1)}W`],
-                                ['风扇转速', `${gpu.fanSpeed?.toFixed(0)}%`],
+                                ['温度', formatMetricNumber(gpu.temperature, 1, '°C')],
+                                ['显存', `${formatMetricBytes(gpu.memoryUsed, 2, 1024)} / ${formatMetricBytes(gpu.memoryTotal, 2, 1024)}`],
+                                ['功耗', formatMetricNumber(gpu.powerUsage, 1, 'W')],
+                                ['风扇转速', formatMetricNumber(gpu.fanSpeed, 0, '%')],
                             ].map(([label, value]) => (
                                 <div key={label} className="flex items-center justify-between">
                                     <span className="text-xs font-medium text-content-secondary">{label}</span>
@@ -526,7 +535,7 @@ const TemperatureMonitorSection = ({latestMetrics}: {latestMetrics: LatestMetric
                             <Thermometer className="h-4 w-4 text-content-secondary"/>
                             <p className="truncate text-xs font-medium text-content-secondary">{temperature.type}</p>
                         </div>
-                        <p className="text-2xl font-bold text-warning">{temperature.temperature.toFixed(1)}°C</p>
+                        <p className="text-2xl font-bold text-warning">{formatMetricNumber(temperature.temperature, 1, '°C')}</p>
                     </div>
                 ))}
             </div>
@@ -1249,41 +1258,8 @@ const GpuChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBase) 
         refetchIntervalMs: isLive ? 5000 : undefined,
     });
 
-    // 数据转换
-    const chartData = useMemo(() => {
-        if (!metricsResponse?.series || metricsResponse.series.length === 0) return [];
-
-        const timeMap = new Map<number, { timestamp: number; utilization?: number; temperature?: number }>();
-
-        const utilizationSeries = metricsResponse.series.find(s => s.name === 'utilization');
-        const temperatureSeries = metricsResponse.series.find(s => s.name === 'temperature');
-
-        utilizationSeries?.data.forEach(point => {
-            const existing = timeMap.get(point.timestamp);
-            if (existing) {
-                existing.utilization = Number(point.value.toFixed(2));
-            } else {
-                timeMap.set(point.timestamp, {
-                    timestamp: point.timestamp,
-                    utilization: Number(point.value.toFixed(2)),
-                });
-            }
-        });
-
-        temperatureSeries?.data.forEach(point => {
-            const existing = timeMap.get(point.timestamp);
-            if (existing) {
-                existing.temperature = Number(point.value.toFixed(2));
-            } else {
-                timeMap.set(point.timestamp, {
-                    timestamp: point.timestamp,
-                    temperature: Number(point.value.toFixed(2)),
-                });
-            }
-        });
-
-        return Array.from(timeMap.values()).sort((a, b) => a.timestamp - b.timestamp);
-    }, [metricsResponse]);
+    const gpuSeries = useMemo(() => getGpuSeries(metricsResponse?.series ?? []), [metricsResponse]);
+    const chartData = useMemo(() => buildGpuChartData(gpuSeries), [gpuSeries]);
 
     // 渲染
     if (isLoading) {
@@ -1333,30 +1309,22 @@ const GpuChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBase) 
                     />
                     <Tooltip content={<CustomTooltip unit=""/>}/>
                     <Legend/>
-                    <Line
-                        yAxisId="left"
-                        type="monotone"
-                        dataKey="utilization"
-                        name="使用率 (%)"
-                        stroke="var(--theme-chart-4)"
-                        strokeWidth={2}
-                        dot={false}
-                        activeDot={{r: 3}}
-                        connectNulls
-                        isAnimationActive={!isLive}
-                    />
-                    <Line
-                        yAxisId="right"
-                        type="monotone"
-                        dataKey="temperature"
-                        name="温度 (°C)"
-                        stroke="var(--theme-chart-3)"
-                        strokeWidth={2}
-                        dot={false}
-                        activeDot={{r: 3}}
-                        connectNulls
-                        isAnimationActive={!isLive}
-                    />
+                    {gpuSeries.map((series, index) => (
+                        <Line
+                            key={series.key}
+                            yAxisId={series.metricType === 'utilization' ? 'left' : 'right'}
+                            type="monotone"
+                            dataKey={series.key}
+                            name={series.name}
+                            stroke={`var(--theme-chart-${index % 5 + 1})`}
+                            strokeDasharray={series.metricType === 'temperature' ? '5 3' : undefined}
+                            strokeWidth={2}
+                            dot={series.points.length === 1 ? {r: 3} : false}
+                            activeDot={{r: 3}}
+                            connectNulls={false}
+                            isAnimationActive={!isLive}
+                        />
+                    ))}
                 </LineChart>
             </ResponsiveContainer>
         </ChartContainer>
@@ -1511,76 +1479,6 @@ const TemperatureChart = memo(TemperatureChartImpl);
 /* ========================================== MonitorChart ========================================== */
 
 /**
- * 降采样算法 - 使用LTTB (Largest Triangle Three Buckets)
- * 确保输出精确的maxPoints个点，保留关键特征
- */
-const downsampleData = (data: any[], maxPoints: number): any[] => {
-    // 边界检查
-    if (!data || data.length === 0) return [];
-    if (maxPoints < 2) maxPoints = 2;
-    if (data.length <= maxPoints) return [...data];
-
-    const result: any[] = [data[0]]; // 保留第一个点
-
-    // 桶大小
-    const bucketSize = (data.length - 2) / (maxPoints - 2);
-
-    for (let i = 0; i < maxPoints - 2; i++) {
-        // 计算当前桶的范围
-        const start = Math.floor((i + 0) * bucketSize) + 1;
-        const end = Math.floor((i + 1) * bucketSize) + 1;
-
-        // 计算前一个点和后一个点
-        const previousPoint = result[result.length - 1];
-        const nextPoint = data[Math.min(end, data.length - 1)];
-
-        // 在桶中选择与前后点形成的三角形面积最大的点
-        let maxArea = -1;
-        let selectedPoint = data[start];
-
-        for (let j = start; j < end && j < data.length - 1; j++) {
-            // 计算三角形面积
-            const area = Math.abs(
-                (previousPoint.timestamp - nextPoint.timestamp) * (data[j].value - previousPoint.value) -
-                (previousPoint.timestamp - data[j].timestamp) * (nextPoint.value - previousPoint.value)
-            );
-
-            if (area > maxArea) {
-                maxArea = area;
-                selectedPoint = data[j];
-            }
-        }
-
-        result.push(selectedPoint);
-    }
-
-    result.push(data[data.length - 1]); // 保留最后一个点
-
-    return result;
-};
-
-/**
- * 根据时间范围确定最大数据点数
- */
-const getMaxDataPoints = (timeRange: string): number => {
-    switch (timeRange) {
-        case '15m':
-        case '1h':
-            return 200; // 短时间：详细数据
-        case '12h':
-            return 300;
-        case '24h':
-            return 400;
-        case '7d':
-            return 500;
-        case '30d':
-            return 600;
-        default:
-            return 400;
-    }
-};
-
-/**
  * 生成不重复的颜色
  * 使用 HSL 色轮均匀分布，支持无限数量的监控项
  */
@@ -1601,7 +1499,7 @@ const generateColors = (count: number): string[] => {
 /**
  * 自定义图例组件
  */
-const CustomLegend = ({ onClick, selectedMonitors, allMonitorKeys, colors, collapsed }: any) => {
+const CustomLegend = ({ onClick, selectedMonitors, allMonitorKeys, monitorNames, colors, collapsed }: any) => {
     if (!allMonitorKeys || allMonitorKeys.length === 0) return null;
 
     if (collapsed) return null;
@@ -1639,7 +1537,7 @@ const CustomLegend = ({ onClick, selectedMonitors, allMonitorKeys, colors, colla
                                 color: isSelected ? color : 'var(--theme-content-muted)',
                             }}
                         >
-                            {monitorKey}
+                            {monitorNames.get(monitorKey) ?? monitorKey}
                         </span>
                     </button>
                 );
@@ -1666,108 +1564,25 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
         refetchIntervalMs: isLive ? 10000 : undefined,
     });
 
-    // 获取所有监控任务的列表（使用名称）
-    const allMonitorKeys = useMemo(() => {
-        const series = metricsResponse?.series || [];
-        return series.map(s => s.labels?.monitor_name || s.labels?.monitor_id || s.name);
-    }, [metricsResponse]);
+    const monitorSeries = useMemo(() => getMonitorSeries(metricsResponse?.series ?? []), [metricsResponse]);
+    const allMonitorKeys = useMemo(() => monitorSeries.map(series => series.key), [monitorSeries]);
+    const monitorNames = useMemo(() => new Map(monitorSeries.map(series => [series.key, series.name])), [monitorSeries]);
+    const knownMonitors = useRef({agentId, keys: new Set<string>()});
 
-    // 初始化选中所有监控任务
     useEffect(() => {
-        if (allMonitorKeys.length > 0 && selectedMonitors.size === 0) {
-            setSelectedMonitors(new Set(allMonitorKeys));
-        }
-    }, [allMonitorKeys, selectedMonitors.size]);
-
-    // 过滤后的监控任务列表
-    const monitorKeys = useMemo(() => {
-        return allMonitorKeys.filter(key => selectedMonitors.has(key));
-    }, [allMonitorKeys, selectedMonitors]);
-
-    // 数据转换 - 支持多个监控任务（统一时间轴 + 线性插值）
-    const chartData = useMemo(() => {
-        const series = metricsResponse?.series || [];
-        if (series.length === 0) return [];
-
-        // 收集所有监控任务的数据
-        const seriesDataArray: Array<{ key: string; data: Array<{ timestamp: number; value: number }> }> = [];
-
-        series.forEach((s) => {
-            const monitorKey = s.labels?.monitor_name || s.labels?.monitor_id || s.name;
-            if (!selectedMonitors.has(monitorKey)) return;
-            if (!s.data || s.data.length === 0) return;
-
-            seriesDataArray.push({
-                key: monitorKey,
-                data: [...s.data].sort((a, b) => a.timestamp - b.timestamp)
-            });
+        const previous = knownMonitors.current;
+        const nextKeys = new Set(allMonitorKeys);
+        knownMonitors.current = {agentId, keys: nextKeys};
+        setSelectedMonitors(current => {
+            const next = reconcileMonitorSelection(
+                previous.agentId === agentId ? previous.keys : new Set(), nextKeys, current,
+            );
+            return next.size === current.size && [...next].every(key => current.has(key)) ? current : next;
         });
+    }, [agentId, allMonitorKeys]);
 
-        if (seriesDataArray.length === 0) return [];
-
-        // 取所有监控任务时间范围的交集，确保每个时间点所有任务都有数据
-        let minTime = -Infinity, maxTime = Infinity;
-        seriesDataArray.forEach(s => {
-            if (s.data.length > 0) {
-                minTime = Math.max(minTime, s.data[0].timestamp);
-                maxTime = Math.min(maxTime, s.data[s.data.length - 1].timestamp);
-            }
-        });
-
-        // 如果没有交集，返回空数组
-        if (minTime >= maxTime) return [];
-
-        // 均匀生成目标时间点
-        const maxPoints = getMaxDataPoints(timeRange);
-        const timeStep = (maxTime - minTime) / (maxPoints - 1);
-        const targetTimestamps: number[] = [];
-        for (let i = 0; i < maxPoints; i++) {
-            targetTimestamps.push(minTime + i * timeStep);
-        }
-
-        // 线性插值函数
-        const interpolate = (data: Array<{ timestamp: number; value: number }>, targetTime: number): number | null => {
-            if (data.length === 0) return null;
-            if (data.length === 1) {
-                // 单点数据，只有精确匹配才返回
-                return data[0].timestamp === targetTime ? data[0].value : null;
-            }
-
-            // 如果目标时间在数据范围外，返回 null（断开折线）
-            if (targetTime < data[0].timestamp || targetTime > data[data.length - 1].timestamp) {
-                return null;
-            }
-
-            // 二分查找找到 targetTime 前后两个点
-            let left = 0, right = data.length - 1;
-            while (right - left > 1) {
-                const mid = Math.floor((left + right) / 2);
-                if (data[mid].timestamp <= targetTime) {
-                    left = mid;
-                } else {
-                    right = mid;
-                }
-            }
-
-            // 线性插值
-            const leftPoint = data[left];
-            const rightPoint = data[right];
-            const ratio = (targetTime - leftPoint.timestamp) / (rightPoint.timestamp - leftPoint.timestamp);
-            return leftPoint.value + ratio * (rightPoint.value - leftPoint.value);
-        };
-
-        // 对每个时间点，从每个监控任务中插值获取值
-        return targetTimestamps.map(timestamp => {
-            const dataPoint: any = { timestamp };
-            seriesDataArray.forEach(s => {
-                const value = interpolate(s.data, timestamp);
-                if (value !== null) {
-                    dataPoint[s.key] = Number(value.toFixed(2));
-                }
-            });
-            return dataPoint;
-        });
-    }, [metricsResponse, selectedMonitors, timeRange, start, end]);
+    const monitorKeys = useMemo(() => allMonitorKeys.filter(key => selectedMonitors.has(key)), [allMonitorKeys, selectedMonitors]);
+    const chartData = useMemo(() => buildMonitorChartData(monitorSeries, selectedMonitors), [monitorSeries, selectedMonitors]);
 
     // 动态生成颜色（根据监控项数量）
     const colors = useMemo(() => {
@@ -1815,14 +1630,14 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
 
     if (isError) return <ChartQueryError title="监控响应时间" icon={Activity}/>;
 
-    // 如果没有数据且不是加载中，不渲染组件
-    if (chartData.length === 0) {
+    // 没有任务时隐藏图表；已有任务但选中数据为空时保留图例和恢复入口。
+    if (allMonitorKeys.length === 0) {
         return null;
     }
 
     return (
         <ChartContainer title="监控响应时间" icon={Activity}>
-            {chartData.length > 0 ? (
+            {allMonitorKeys.length > 0 ? (
                 <>
                     {/* 使用提示和恢复按钮 */}
                     {allMonitorKeys.length > 1 && (
@@ -1848,7 +1663,7 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
                         </div>
                     )}
 
-                    <ResponsiveContainer width="100%" height={250}>
+                    {chartData.length > 0 ? <ResponsiveContainer width="100%" height={250}>
                         <AreaChart data={chartData}>
                             <defs>
                                 {monitorKeys.map((key, index) => {
@@ -1892,12 +1707,13 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
                                         key={key}
                                         type="monotone"
                                         dataKey={key}
-                                        name={key}
+                                        name={monitorNames.get(key) ?? key}
                                         stroke={colors[originalIndex]}
                                         strokeWidth={2}
                                         fill={`url(#monitorAreaGradient-${index})`}
                                         activeDot={{r: 3}}
-                                        connectNulls
+                                        dot={monitorSeries.find(series => series.key === key)?.points.length === 1 ? {r: 3} : false}
+                                        connectNulls={false}
                                         onClick={handleAreaClick}
                                         style={{cursor: 'pointer'}}
                                         isAnimationActive={!isLive}
@@ -1905,7 +1721,7 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
                                 );
                             })}
                         </AreaChart>
-                    </ResponsiveContainer>
+                    </ResponsiveContainer> : <ChartPlaceholder subtitle="暂无选中的监控数据，可通过图例或恢复按钮重新选择"/>}
 
                     {/* 桌面端：直接显示图例 */}
                     {!isMobile && allMonitorKeys.length > 0 && (
@@ -1913,6 +1729,7 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
                             onClick={handleLegendClick}
                             selectedMonitors={selectedMonitors}
                             allMonitorKeys={allMonitorKeys}
+                            monitorNames={monitorNames}
                             colors={colors}
                         />
                     )}
@@ -1933,6 +1750,7 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
                                 onClick={handleLegendClick}
                                 selectedMonitors={selectedMonitors}
                                 allMonitorKeys={allMonitorKeys}
+                                monitorNames={monitorNames}
                                 colors={colors}
                                 collapsed={legendCollapsed}
                             />

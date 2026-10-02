@@ -5,7 +5,7 @@ import {Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAx
 import {AlertCircle, ArrowLeft, ChevronDown, ChevronUp, Clock, MapPin, RotateCcw} from 'lucide-react';
 import {PikaAPIError, pika} from '../api';
 import type {AgentMonitorStat, MetricsResponse, PublicMonitor} from '../types';
-import {AGENT_COLORS, MONITOR_TIME_RANGE_OPTIONS} from '../constants';
+import {MONITOR_TIME_RANGE_OPTIONS} from '../constants';
 import {cn, formatChartTime, formatDateTime, formatTime} from '../lib/utils';
 import {useIsMobile} from '../hooks';
 import {
@@ -101,10 +101,11 @@ const MonitorHero = ({monitor, onBack}: MonitorHeroProps) => {
 
 interface AgentStatsTableProps {
     monitorStats: AgentMonitorStat[];
+    agentColors: ReadonlyMap<string, string>;
     monitorType: string;
 }
 
-const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
+const AgentStatsTable = ({monitorStats, monitorType, agentColors}: AgentStatsTableProps) => {
     if (monitorStats.length === 0) {
         return (
             <div className="text-center py-12 text-content-secondary">
@@ -117,8 +118,8 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
         <Card title="探针监控详情">
             {/* 移动端卡片布局 */}
             <div className="block lg:hidden space-y-3">
-                {monitorStats.map((stat, index) => {
-                    const color = AGENT_COLORS[index % AGENT_COLORS.length];
+                {monitorStats.map((stat) => {
+                    const color = agentColors.get(stat.agentId);
                     return (
                         <div
                             key={stat.agentId}
@@ -210,8 +211,8 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
                     </tr>
                     </thead>
                     <tbody className="divide-y divide-line">
-                    {monitorStats.map((stat, index) => {
-                        const color = AGENT_COLORS[index % AGENT_COLORS.length];
+                    {monitorStats.map((stat) => {
+                        const color = agentColors.get(stat.agentId);
                         return (
                             <tr key={stat.agentId}
                                 className="transition-colors hover:bg-panel-hover">
@@ -373,11 +374,12 @@ const CustomLegend = ({onClick, selectedAgents, allAgents, colors, collapsed}: a
 
 interface ResponseTimeChartProps {
     monitorId: string;
+    agentColors: ReadonlyMap<string, string>;
     monitorStats: AgentMonitorStat[];
     available: boolean;
 }
 
-const ResponseTimeChart = ({monitorId, monitorStats, available}: ResponseTimeChartProps) => {
+const ResponseTimeChart = ({monitorId, monitorStats, available, agentColors}: ResponseTimeChartProps) => {
     const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
     const [timeRange, setTimeRange] = useState<string>('12h');
     const [customRange, setCustomRange] = useState<{start: number; end: number} | null>(null);
@@ -418,10 +420,10 @@ const ResponseTimeChart = ({monitorId, monitorStats, available}: ResponseTimeCha
         }
     }, [availableAgents, selectedAgents.size]);
 
-    // 动态生成颜色
+    // 图表、图例和探针详情共享同一份按探针 ID 建立的颜色映射。
     const colors = useMemo(() => {
-        return generateColors(availableAgents.length);
-    }, [availableAgents.length]);
+        return availableAgents.map(agent => agentColors.get(agent.id));
+    }, [availableAgents, agentColors]);
 
     const toggleAgent = (agentId: string) => {
         setSelectedAgents((current) => {
@@ -736,6 +738,12 @@ const MonitorDetail = () => {
         enabled: !!id,
     });
 
+    const agentColors = useMemo(() => {
+        const agentIds = [...new Set(monitorStats.map(stat => stat.agentId))].sort();
+        const colors = generateColors(agentIds.length);
+        return new Map(agentIds.map((agentId, index) => [agentId, colors[index]]));
+    }, [monitorStats]);
+
     if (isLoading) {
         return <LoadingSpinner/>;
     }
@@ -769,6 +777,7 @@ const MonitorDetail = () => {
                     {/* 响应时间趋势图表 */}
                     <ResponseTimeChart
                         monitorId={id!}
+                        agentColors={agentColors}
                         monitorStats={monitorStats}
                         available={isMonitorAvailable(monitorDetail)}
                     />
@@ -778,6 +787,7 @@ const MonitorDetail = () => {
                         <ErrorState message="探针监控详情加载失败。" onRetry={() => void refetchStats()}/>
                     ) : (
                         <AgentStatsTable
+                            agentColors={agentColors}
                             monitorStats={monitorStats}
                             monitorType={monitorDetail.type}
                         />
