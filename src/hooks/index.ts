@@ -1,6 +1,7 @@
 import {useEffect, useRef, useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {pika} from '../api';
+import {POLLING_INTERVALS} from '../constants';
 import type {Agent, LatestMetrics, MetricsAggregation, MetricsParams, MetricsResponse} from '../types';
 
 interface UseMetricsQueryOptions {
@@ -20,11 +21,11 @@ export const useAgentQuery = (agentId?: string) => {
         queryFn: () => pika.getAgent<Agent>(agentId!),
         enabled: !!agentId,
         staleTime: 60000,
-        refetchInterval: 5000,
+        refetchInterval: POLLING_INTERVALS.metadata,
     });
 };
 
-export const useLatestMetricsQuery = (agentId?: string, intervalMs: number = 5000, enabled = true) => {
+export const useLatestMetricsQuery = (agentId?: string, intervalMs: number = POLLING_INTERVALS.latestMetrics, enabled = true) => {
     return useQuery({
         queryKey: ['agent', agentId, 'metrics', 'latest'],
         queryFn: () => pika.getLatestMetrics<LatestMetrics>(agentId!),
@@ -55,6 +56,8 @@ export const useNetworkInterfacesQuery = (agentId?: string) => {
         queryKey: ['agent', agentId, 'network-interfaces'],
         queryFn: () => pika.getNetworkInterfaces(agentId!),
         enabled: !!agentId,
+        staleTime: POLLING_INTERVALS.metadata,
+        refetchInterval: POLLING_INTERVALS.metadata,
     });
 };
 

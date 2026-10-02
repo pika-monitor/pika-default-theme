@@ -22,6 +22,7 @@ import {
     LIVE_INITIAL_RANGE,
     LIVE_RANGE,
     LIVE_WINDOW_MS,
+    POLLING_INTERVALS,
     SERVER_TIME_RANGE_OPTIONS,
     TEMPERATURE_COLORS,
 } from '../constants';
@@ -1246,7 +1247,7 @@ const GpuChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBase) 
         range: start !== undefined && end !== undefined ? undefined : effectiveRange,
         start,
         end,
-        refetchIntervalMs: isLive ? 5000 : undefined,
+        refetchIntervalMs: isLive ? POLLING_INTERVALS.liveHistory : undefined,
     });
 
     // 数据转换
@@ -1379,7 +1380,7 @@ const TemperatureChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPro
         range: start !== undefined && end !== undefined ? undefined : effectiveRange,
         start,
         end,
-        refetchIntervalMs: isLive ? 5000 : undefined,
+        refetchIntervalMs: isLive ? POLLING_INTERVALS.liveHistory : undefined,
     });
 
     // 数据转换
@@ -1663,7 +1664,7 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
         range: start !== undefined && end !== undefined ? undefined : effectiveRange,
         start,
         end,
-        refetchIntervalMs: isLive ? 10000 : undefined,
+        refetchIntervalMs: isLive ? POLLING_INTERVALS.liveHistory : undefined,
     });
 
     // 获取所有监控任务的列表（使用名称）
@@ -1969,14 +1970,13 @@ const ServerDetail = () => {
     const customEnd = timeRange === 'custom' ? customRange?.end : undefined;
 
     // 查询基础数据（用于页面头部和系统信息）
-    // 实时模式 1s 拉取最新指标，其余 5s
     const {data: agentResponse, isLoading, isError, error, refetch} = useAgentQuery(id);
     const isOnline = isAgentOnline(agentResponse);
     const {
         data: latestMetricsResponse,
         isError: isLatestMetricsError,
         refetch: refetchLatestMetrics,
-    } = useLatestMetricsQuery(id, isLive ? 1000 : 5000, isOnline);
+    } = useLatestMetricsQuery(id, POLLING_INTERVALS.latestMetrics, isOnline);
 
     const agent = agentResponse;
     const latestMetrics = isOnline ? latestMetricsResponse || null : null;

@@ -17,6 +17,7 @@ import {
     UnlinkIcon
 } from 'lucide-react';
 import {pika} from '../api';
+import {POLLING_INTERVALS} from '../constants';
 import type {LatestMetrics, TagsResponse} from '../types';
 import {cn, formatBytes, formatTraffic, formatSpeed, formatUptime, isExpired, isExpiringSoon} from '../lib/utils';
 import {AgentExpiryBadge, AgentOfflineState, Card, ErrorState, LoadingSpinner, MetricBar, StatCard, StatusSummary} from '../components/index';
@@ -320,7 +321,7 @@ const ServerList = () => {
     const {data: agents = [], isLoading, isError, refetch} = useQuery<AgentWithMetrics[]>({
         queryKey: ['agents', 'online'],
         queryFn: () => pika.listAgents<AgentWithMetrics>(),
-        refetchInterval: 3000,
+        refetchInterval: POLLING_INTERVALS.serverList,
     });
 
     // 获取标签列表
