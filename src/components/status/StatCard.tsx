@@ -17,7 +17,7 @@ const toneSurfaces: Record<Tone, string> = {
     accent: 'border-brand/20 bg-brand-muted',
     success: 'dark:border-emerald-500/30 dark:bg-success-muted',
     warning: 'dark:border-amber-500/30 dark:bg-warning-muted',
-    danger: 'dark:border-rose-500/30 dark:bg-danger-muted',
+    danger: 'dark:border-danger/30 dark:bg-danger-muted',
 };
 
 interface StatCardProps {

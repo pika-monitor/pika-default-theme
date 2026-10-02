@@ -5,7 +5,6 @@ import {
     Activity,
     ArrowDown,
     ArrowUp,
-    Calendar,
     Clock,
     Cpu,
     Filter,
@@ -86,9 +85,6 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
     const trafficUsagePercent = traffic?.enabled && traffic.limit > 0
         ? Math.min(100, (traffic.used / traffic.limit) * 100)
         : 0;
-    const expiryNeedsAttention = server.expireTime > 0 && (
-        isExpired(server.expireTime) || isExpiringSoon(server.expireTime)
-    );
 
     return (
         <Link to={`/servers/${server.id.substring(0, 8)}`} className="block h-full">
@@ -144,12 +140,7 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
                             {server.expireTime > 0 && (
                                 <>
                                     {isOnline && server.metrics?.host && <span className="h-2 w-px bg-line-strong"/>}
-                                    <div className={cn('flex items-center gap-1', expiryNeedsAttention && 'text-warning')}>
-                                        <Calendar className="h-3 w-3"/>
-                                        <time dateTime={new Date(server.expireTime).toISOString()}>
-                                            {new Date(server.expireTime).toLocaleDateString('zh-CN')}
-                                        </time>
-                                    </div>
+                                    <AgentExpiryBadge expireTime={server.expireTime}/>
                                 </>
                             )}
                         </div>
@@ -501,7 +492,7 @@ const ServerList = () => {
                         : publicSignals.offline > 0
                         ? {label: `${publicSignals.offline} 台暂不可达`, status: 'down', onClick: () => setSelectedTag('OFFLINE')}
                         : {label: '所有设备可达', status: 'healthy'},
-                    publicSignals.expired > 0 && {label: `${publicSignals.expired} 台已过期`, status: 'degraded', onClick: () => setSelectedTag('EXPIRED')},
+                    publicSignals.expired > 0 && {label: `${publicSignals.expired} 台已过期`, status: 'down', onClick: () => setSelectedTag('EXPIRED')},
                     publicSignals.expiringSoon > 0 && {label: `${publicSignals.expiringSoon} 台即将到期`, status: 'degraded'},
                     publicSignals.resourcePressure > 0 && {label: `${publicSignals.resourcePressure} 台资源负载较高`, status: 'degraded'},
                     publicSignals.trafficNearLimit > 0 && {label: `${publicSignals.trafficNearLimit} 台流量接近限额`, status: 'degraded'},
@@ -562,7 +553,7 @@ const ServerList = () => {
                     {/* 桌面端表格布局 */}
                     <div
                         className="hidden overflow-x-auto rounded-card border border-line bg-panel shadow-card xl:block">
-                        <table className="w-full min-w-[1180px] table-fixed border-collapse text-left">
+                        <table className="w-full min-w-[1200px] table-fixed border-collapse text-left">
                             <thead>
                             <tr className="border-b border-line bg-panel-muted text-xs font-semibold text-content-muted">
                                 <th className="w-[230px] p-5 font-bold">设备</th>
@@ -570,7 +561,7 @@ const ServerList = () => {
                                 <th className="w-[160px] p-5 font-bold">实时速率</th>
                                 <th className="w-[210px] p-5 font-bold">流量</th>
                                 <th className="p-5 font-bold w-[150px]">连接</th>
-                                <th className="w-[180px] p-5 font-bold">标签与到期日</th>
+                                <th className="w-[200px] p-5 font-bold">标签与到期日</th>
                             </tr>
                             </thead>
                             <tbody className="divide-y divide-line">

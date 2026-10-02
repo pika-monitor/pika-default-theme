@@ -17,8 +17,8 @@
     --theme-success-muted: #ecfdf5;
     --theme-warning: #a84b08;
     --theme-warning-muted: #fffbeb;
-    --theme-danger: #be123c;
-    --theme-danger-muted: #fff1f2;
+    --theme-danger: #dc2626;
+    --theme-danger-muted: #fef2f2;
     --theme-chart-1: #2563eb;
     --theme-chart-2: #10b981;
     --theme-chart-3: #f97316;
@@ -47,13 +47,13 @@
     --theme-success-muted: #112f2d;
     --theme-warning: #fbbf24;
     --theme-warning-muted: #262527;
-    --theme-danger: #ff8aa0;
-    --theme-danger-muted: #262033;
+    --theme-danger: #ff6666;
+    --theme-danger-muted: #3b2020;
     --theme-chart-1: #60a5fa;
     --theme-chart-2: #34d399;
     --theme-chart-3: #fb923c;
     --theme-chart-4: #c084fc;
-    --theme-chart-5: #fb7185;
+    --theme-chart-5: #ff6666;
     --theme-shadow-card: 0 8px 24px rgb(2 6 23 / 24%);
 }
 
