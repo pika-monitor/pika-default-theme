@@ -198,6 +198,7 @@ export interface MonitorData {
 
 export interface LatestMetrics {
     timestamp?: number;
+    sampleTimestamps?: Partial<Record<'cpu' | 'memory' | 'disk' | 'disk_io' | 'network' | 'network_connection' | 'host' | 'gpu' | 'temperature' | 'monitor', number>>;
     cpu?: CPUMetric;
     memory?: MemoryMetric;
     disk?: DiskSummary;

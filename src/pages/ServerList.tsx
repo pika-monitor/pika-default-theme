@@ -498,7 +498,7 @@ const ServerList = () => {
                     publicSignals.resourcePressure > 0 && {label: `${publicSignals.resourcePressure} 台资源负载较高`, status: 'degraded'},
                     publicSignals.trafficNearLimit > 0 && {label: `${publicSignals.trafficNearLimit} 台流量接近限额`, status: 'degraded'},
                 ]}
-                refreshLabel="数据每 3 秒刷新"
+                refreshLabel={`列表每 ${POLLING_INTERVALS.serverList / 1000} 秒自动刷新`}
             />
 
             {/* 标签过滤器 */}
@@ -559,7 +559,7 @@ const ServerList = () => {
                             <tr className="border-b border-line bg-panel-muted text-xs font-semibold text-content-muted">
                                 <th className="w-[230px] p-5 font-bold">设备</th>
                                 <th className="w-[250px] p-5 font-bold">资源</th>
-                                <th className="w-[140px] p-5 font-bold">实时速率</th>
+                                <th className="w-[140px] p-5 font-bold">当前速率</th>
                                 <th className="w-[210px] p-5 font-bold">流量</th>
                                 <th className="p-5 font-bold w-[200px]">连接</th>
                                 <th className="w-[200px] p-5 font-bold">标签与到期日</th>

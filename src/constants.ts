@@ -5,14 +5,14 @@ export const LIVE_INITIAL_RANGE = '2m';
 export const LIVE_WINDOW_MS = 2 * 60 * 1000;
 
 export const POLLING_INTERVALS = {
-    serverList: 10000,
+    serverList: 5000,
     latestMetrics: 5000,
     liveHistory: 10000,
     metadata: 30000,
 } as const;
 
 export const SERVER_TIME_RANGE_OPTIONS: TimeRangeOption[] = [
-    {label: '实时', value: LIVE_RANGE},
+    {label: '自动刷新', value: LIVE_RANGE},
     {label: '15分钟', value: '15m'},
     {label: '30分钟', value: '30m'},
     {label: '1小时', value: '1h'},

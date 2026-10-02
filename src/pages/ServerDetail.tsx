@@ -578,13 +578,14 @@ const CpuChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: CpuCh
 
     // 实时点
     const livePoint = useMemo<CpuPoint | null>(() => {
-        if (!isLive || !latestMetrics?.cpu || !latestMetrics.timestamp) return null;
+        const timestamp = latestMetrics?.sampleTimestamps?.cpu;
+        if (!isLive || !latestMetrics?.cpu || !timestamp) return null;
         const usage = latestMetrics.cpu.usagePercent;
         if (typeof usage !== 'number' || !Number.isFinite(usage)) return null;
-        return {timestamp: latestMetrics.timestamp, usage: Number(usage.toFixed(2))};
+        return {timestamp, usage: Number(usage.toFixed(2))};
     }, [isLive, latestMetrics]);
 
-    const chartData = useLiveBuffer(initialData, !!isLive, livePoint, LIVE_WINDOW_MS, agentId);
+    const chartData = useLiveBuffer(initialData, !!isLive && !!latestMetrics?.sampleTimestamps, livePoint, LIVE_WINDOW_MS, agentId);
 
     // 渲染
     if (isLoading) {
@@ -678,13 +679,14 @@ const MemoryChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
 
     // 实时点
     const livePoint = useMemo<MemoryPoint | null>(() => {
-        if (!isLive || !latestMetrics?.memory || !latestMetrics.timestamp) return null;
+        const timestamp = latestMetrics?.sampleTimestamps?.memory;
+        if (!isLive || !latestMetrics?.memory || !timestamp) return null;
         const usage = latestMetrics.memory.usagePercent;
         if (typeof usage !== 'number' || !Number.isFinite(usage)) return null;
-        return {timestamp: latestMetrics.timestamp, usage: Number(usage.toFixed(2))};
+        return {timestamp, usage: Number(usage.toFixed(2))};
     }, [isLive, latestMetrics]);
 
-    const chartData = useLiveBuffer(initialData, !!isLive, livePoint, LIVE_WINDOW_MS, agentId);
+    const chartData = useLiveBuffer(initialData, !!isLive && !!latestMetrics?.sampleTimestamps, livePoint, LIVE_WINDOW_MS, agentId);
 
     // 渲染
     if (isLoading) {
@@ -802,17 +804,18 @@ const DiskIOChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
         return Array.from(timeMap.values()).sort((a, b) => a.timestamp - b.timestamp);
     }, [metricsResponse]);
 
-    // 实时点：用 latestMetrics.timestamp 作为同批次时间锚
+    // 使用对应指标的采集时间
     const livePoint = useMemo<DiskIOPoint | null>(() => {
-        if (!isLive || !latestMetrics?.diskIO || !latestMetrics.timestamp) return null;
+        const timestamp = latestMetrics?.sampleTimestamps?.disk_io;
+        if (!isLive || !latestMetrics?.diskIO || !timestamp) return null;
         return {
-            timestamp: latestMetrics.timestamp,
+            timestamp,
             read: toMB(latestMetrics.diskIO.totalReadBytesRate),
             write: toMB(latestMetrics.diskIO.totalWriteBytesRate),
         };
     }, [isLive, latestMetrics]);
 
-    const chartData = useLiveBuffer(initialData, !!isLive, livePoint, LIVE_WINDOW_MS, agentId);
+    const chartData = useLiveBuffer(initialData, !!isLive && !!latestMetrics?.sampleTimestamps, livePoint, LIVE_WINDOW_MS, agentId);
 
     // 渲染
     if (isLoading) {
@@ -963,9 +966,10 @@ const NetworkChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: C
         return Array.from(timeMap.values()).sort((a, b) => a.timestamp - b.timestamp);
     }, [metricsResponse]);
 
-    // 实时点：用 latestMetrics.timestamp 作为采集批次时间锚点
+    // 使用对应指标的采集时间
     const livePoint = useMemo<NetworkPoint | null>(() => {
-        if (!isLive || !latestMetrics?.timestamp) return null;
+        const timestamp = latestMetrics?.sampleTimestamps?.network;
+        if (!isLive || !timestamp) return null;
 
         let sentRate = 0;
         let recvRate = 0;
@@ -981,13 +985,13 @@ const NetworkChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: C
             recvRate = iface.bytesRecvRate;
         }
         return {
-            timestamp: latestMetrics.timestamp,
+            timestamp,
             upload: toMB(sentRate),
             download: toMB(recvRate),
         };
     }, [isLive, latestMetrics, selectedInterface]);
 
-    const chartData = useLiveBuffer(initialData, !!isLive, livePoint, LIVE_WINDOW_MS, `${agentId}|${selectedInterface}`);
+    const chartData = useLiveBuffer(initialData, !!isLive && !!latestMetrics?.sampleTimestamps, livePoint, LIVE_WINDOW_MS, `${agentId}|${selectedInterface}`);
 
     // 网卡选择器
     const interfaceSelector = availableInterfaces.length > 0 && (
@@ -1134,10 +1138,11 @@ const NetworkConnectionChart = ({agentId, timeRange, start, end, isLive, latestM
 
     // 实时点
     const livePoint = useMemo<ConnPoint | null>(() => {
-        if (!isLive || !latestMetrics?.networkConnection || !latestMetrics.timestamp) return null;
+        const timestamp = latestMetrics?.sampleTimestamps?.network_connection;
+        if (!isLive || !latestMetrics?.networkConnection || !timestamp) return null;
         const c = latestMetrics.networkConnection;
         return {
-            timestamp: latestMetrics.timestamp,
+            timestamp,
             established: c.established ?? 0,
             time_wait: c.timeWait ?? 0,
             close_wait: c.closeWait ?? 0,
@@ -1145,7 +1150,7 @@ const NetworkConnectionChart = ({agentId, timeRange, start, end, isLive, latestM
         };
     }, [isLive, latestMetrics]);
 
-    const chartData = useLiveBuffer(initialData, !!isLive, livePoint, LIVE_WINDOW_MS, agentId);
+    const chartData = useLiveBuffer(initialData, !!isLive && !!latestMetrics?.sampleTimestamps, livePoint, LIVE_WINDOW_MS, agentId);
 
     // 渲染
     if (isLoading) {
@@ -1373,7 +1378,7 @@ const TemperatureChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPro
     const rangeMs = start !== undefined && end !== undefined ? end - start : undefined;
     const effectiveRange = isLive ? LIVE_INITIAL_RANGE : timeRange;
 
-    // 数据查询：温度采集 5s 一次，实时模式 5s 重查
+    // 数据查询：自动刷新模式按配置的间隔重查
     const {data: metricsResponse, isLoading, isError} = useMetricsQuery({
         agentId,
         type: 'temperature',
@@ -1953,7 +1958,7 @@ const MonitorChart = memo(MonitorChartImpl);
 
 /**
  * 服务器详情页面
- * 显示服务器的详细信息、实时指标和历史趋势图表
+ * 显示服务器的详细信息、最新指标和历史趋势图表
  */
 const ServerDetail = () => {
     const {id} = useParams<{ id: string }>();
@@ -2020,7 +2025,7 @@ const ServerDetail = () => {
                 {/* 主内容区 */}
                 <main className="mt-6 flex-1 space-y-6">
                     {isOnline && isLatestMetricsError && (
-                        <ErrorState className="min-h-[180px]" message="设备当前在线，但实时指标加载失败。" onRetry={() => void refetchLatestMetrics()}/>
+                        <ErrorState className="min-h-[180px]" message="设备当前在线，但最新指标加载失败。" onRetry={() => void refetchLatestMetrics()}/>
                     )}
                     {/* 网络地址信息 */}
                     {(agent.ipv4 || agent.ipv6 || deviceIpInterfaces?.length > 0) && (
