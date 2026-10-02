@@ -205,18 +205,18 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
                         {isOnline && netConn && (
                             <div className="flex gap-3 text-xs tabular-nums">
                             <span className="flex items-center gap-1">
-                                <Network className="w-3 h-3 text-success"/>
+                                <Network className="w-3 h-3 shrink-0 text-success"/>
                                 <span
                                     className="text-success">{netConn.established || 0}</span>
                                 <span className="text-content-secondary">ESTABLISHED</span>
                             </span>
                                 <span className="flex items-center gap-1">
-                                <Network className="w-3 h-3 text-brand"/>
+                                <Network className="w-3 h-3 shrink-0 text-brand"/>
                                 <span className="text-brand">{netConn.listen || 0}</span>
                                 <span className="text-content-secondary">LISTEN</span>
                             </span>
                                 <span className="flex items-center gap-1">
-                                <Network className="w-3 h-3 text-danger"/>
+                                <Network className="w-3 h-3 shrink-0 text-danger"/>
                                 <span className="text-danger">{netConn.closeWait || 0}</span>
                                 <span className="text-content-secondary">CLOSE_WAIT</span>
                             </span>
@@ -553,14 +553,14 @@ const ServerList = () => {
                     {/* 桌面端表格布局 */}
                     <div
                         className="hidden overflow-x-auto rounded-card border border-line bg-panel shadow-card xl:block">
-                        <table className="w-full min-w-[1200px] table-fixed border-collapse text-left">
+                        <table className="w-full min-w-[1230px] table-fixed border-collapse text-left">
                             <thead>
                             <tr className="border-b border-line bg-panel-muted text-xs font-semibold text-content-muted">
                                 <th className="w-[230px] p-5 font-bold">设备</th>
                                 <th className="w-[250px] p-5 font-bold">资源</th>
-                                <th className="w-[160px] p-5 font-bold">实时速率</th>
+                                <th className="w-[140px] p-5 font-bold">实时速率</th>
                                 <th className="w-[210px] p-5 font-bold">流量</th>
-                                <th className="p-5 font-bold w-[150px]">连接</th>
+                                <th className="p-5 font-bold w-[200px]">连接</th>
                                 <th className="w-[200px] p-5 font-bold">标签与到期日</th>
                             </tr>
                             </thead>
@@ -674,7 +674,7 @@ const ServerList = () => {
                                         </td>
 
                                         {/* Network */}
-                                        <td className="p-4 align-middle tabular-nums text-xs">
+                                        <td className="p-4 align-middle tabular-nums text-xs whitespace-nowrap">
                                             {isOnline && <div className="flex flex-col gap-1.5 mb-1.5">
                                                 <span
                                                     className="flex items-center gap-2 text-success">
@@ -727,25 +727,25 @@ const ServerList = () => {
                                         </td>
 
                                         {/* Connections */}
-                                        <td className="p-4 align-middle tabular-nums text-xs">
+                                        <td className="p-4 align-middle tabular-nums text-xs whitespace-nowrap">
                                             {isOnline && netConn && (
                                                 <div className="flex flex-col gap-1.5">
                                                     <div className="flex items-center gap-2">
                                                         <Network
-                                                            className="w-3 h-3 text-success"/>
+                                                            className="w-3 h-3 shrink-0 text-success"/>
                                                         <span
                                                             className="text-success">{netConn.established || 0}</span>
                                                         <span
                                                             className="text-content-secondary">ESTABLISHED</span>
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <Network className="w-3 h-3 text-brand"/>
+                                                        <Network className="w-3 h-3 shrink-0 text-brand"/>
                                                         <span
                                                             className="text-brand">{netConn.listen || 0}</span>
                                                         <span className="text-content-secondary">LISTEN</span>
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <Network className="w-3 h-3 text-danger"/>
+                                                        <Network className="w-3 h-3 shrink-0 text-danger"/>
                                                         <span
                                                             className="text-danger">{netConn.closeWait || 0}</span>
                                                         <span
