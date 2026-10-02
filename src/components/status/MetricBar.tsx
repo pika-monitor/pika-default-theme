@@ -22,7 +22,7 @@ export const MetricBar = ({type, value, label, icon: Icon, detail}: MetricBarPro
     const barColor = safeValue >= 90 ? 'bg-danger' : safeValue >= 75 ? 'bg-warning' : metricColors[type];
     const textColor = safeValue >= 90 ? 'text-danger' : safeValue >= 75 ? 'text-warning' : 'text-content-secondary';
     return (
-        <div className="flex h-6 w-full items-center gap-2 tabular-nums text-xs" title={detail}>
+        <div className="flex h-6 w-full items-center gap-1 tabular-nums text-xs" title={detail}>
             <div className={cn('flex w-14 shrink-0 items-center gap-1.5 font-semibold', textColor)}>
                 <Icon className="h-3.5 w-3.5"/>
                 <span>{label}</span>
@@ -33,7 +33,7 @@ export const MetricBar = ({type, value, label, icon: Icon, detail}: MetricBarPro
                     style={{width: `${safeValue}%`}}
                 />
             </div>
-            <span className={cn('w-14 shrink-0 text-right tabular-nums', textColor)}>{safeValue.toFixed(1)}%</span>
+            <span className={cn('w-[6ch] shrink-0 text-right tabular-nums', textColor)}>{safeValue.toFixed(1)}%</span>
         </div>
     );
 };

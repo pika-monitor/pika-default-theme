@@ -553,16 +553,16 @@ const ServerList = () => {
                 <>
                     {/* 桌面端表格布局 */}
                     <div
-                        className="hidden overflow-x-auto rounded-card border border-line bg-panel shadow-card xl:block">
-                        <table className="w-full min-w-[1230px] table-fixed border-collapse text-left">
+                        className="hidden overflow-x-hidden rounded-card border border-line bg-panel shadow-card xl:block">
+                        <table className="w-full table-fixed border-collapse text-left">
                             <thead>
                             <tr className="border-b border-line bg-panel-muted text-xs font-semibold text-content-muted">
-                                <th className="w-[230px] p-5 font-bold">设备</th>
-                                <th className="w-[250px] p-5 font-bold">资源</th>
-                                <th className="w-[140px] p-5 font-bold">当前速率</th>
-                                <th className="w-[210px] p-5 font-bold">流量</th>
-                                <th className="p-5 font-bold w-[200px]">连接</th>
-                                <th className="w-[200px] p-5 font-bold">标签与到期日</th>
+                                <th className="w-[19%] p-5 font-bold">设备</th>
+                                <th className="w-[20%] p-5 font-bold">资源</th>
+                                <th className="w-[12%] p-5 font-bold">当前速率</th>
+                                <th className="w-[17%] p-5 font-bold">流量</th>
+                                <th className="w-[16%] p-5 font-bold">连接</th>
+                                <th className="w-[16%] p-5 font-bold">标签与到期日</th>
                             </tr>
                             </thead>
                             <tbody className="divide-y divide-line">
