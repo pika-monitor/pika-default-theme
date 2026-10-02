@@ -28,6 +28,7 @@ import {
 import {
     cn,
     formatBytes,
+    formatTraffic,
     formatChartTime,
     formatDateTime,
     formatPercentValue,
@@ -349,7 +350,7 @@ const SystemInfoSection = ({agent, latestMetrics}: SystemInfoSectionProps) => {
 
             networkMetrics.push({
                 label: '流量限额',
-                value: `${formatBytes(agent.trafficStats.used, 1)} / ${formatBytes(agent.trafficStats.limit, 1)} (${formatPercentValue(trafficUsedPercent)}%)`,
+                value: `${formatTraffic(agent.trafficStats.used)} / ${formatTraffic(agent.trafficStats.limit)} (${formatPercentValue(trafficUsedPercent)}%)`,
             });
 
             if (agent.trafficStats.resetDay > 0) {

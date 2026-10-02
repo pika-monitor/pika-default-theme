@@ -14,6 +14,9 @@ export const formatBytes = (value: number | undefined | null, precision = 2, bas
     return `${(value / base ** index).toFixed(precision)} ${units[index]}`;
 };
 
+// 流量配额与管理后台保持一致：1 GB = 1024³ B，保留既有配额含义。
+export const formatTraffic = (bytes: number | undefined | null): string => formatBytes(bytes, 2, 1024);
+
 export const formatSpeed = (bytesPerSecond: number): string => {
     if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return '0 B/s';
     const units = ['B/s', 'K/s', 'M/s', 'G/s', 'T/s', 'P/s'];

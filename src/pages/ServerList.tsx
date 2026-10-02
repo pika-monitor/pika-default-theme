@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import {pika} from '../api';
 import type {LatestMetrics, TagsResponse} from '../types';
-import {cn, formatBytes, formatSpeed, formatUptime, isExpired, isExpiringSoon} from '../lib/utils';
+import {cn, formatBytes, formatTraffic, formatSpeed, formatUptime, isExpired, isExpiringSoon} from '../lib/utils';
 import {AgentExpiryBadge, AgentOfflineState, Card, ErrorState, LoadingSpinner, MetricBar, StatCard, StatusSummary} from '../components/index';
 import {hasAgentResourcePressure, isAgentOnline, isAgentTrafficNearLimit, type AgentWithMetrics} from '../domain/agents/agent-view-model';
 import PublicPageContainer from '../layouts/PublicPageContainer';
@@ -241,7 +241,7 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
                                     <>
                                         <div className="flex items-baseline justify-between">
                                             <span className="text-xs text-content-secondary font-mono">
-                                                {formatBytes(traffic.used, 1)} / {formatBytes(traffic.limit, 1)}
+                                                {formatTraffic(traffic.used)} / {formatTraffic(traffic.limit)}
                                             </span>
                                             <span className="text-xs font-bold text-content-secondary font-mono">
                                                 {trafficUsagePercent.toFixed(1)}%
@@ -259,7 +259,7 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
                                     </>
                                 ) : (
                                     <div className="text-xs text-content-muted font-mono">
-                                        已使用: {formatBytes(traffic.used, 1)}
+                                        已使用: {formatTraffic(traffic.used)}
                                         <div className="text-xs text-content-muted mt-1">仅统计模式</div>
                                     </div>
                                 )}
@@ -709,7 +709,7 @@ const ServerList = () => {
                                                         <>
                                                             <div className="flex items-baseline justify-between">
                                                                 <span className="text-xs text-content-secondary font-mono">
-                                                                    {formatBytes(traffic.used, 1)} / {formatBytes(traffic.limit, 1)}
+                                                                    {formatTraffic(traffic.used)} / {formatTraffic(traffic.limit)}
                                                                 </span>
                                                                 <span className="text-xs font-bold text-content-secondary font-mono">
                                                                     {trafficUsagePercent.toFixed(1)}%
@@ -727,7 +727,7 @@ const ServerList = () => {
                                                         </>
                                                     ) : (
                                                         <div className="text-xs text-content-muted font-mono">
-                                                            已使用: {formatBytes(traffic.used, 1)}
+                                                            已使用: {formatTraffic(traffic.used)}
                                                             <div className="text-xs text-content-muted mt-1">仅统计模式</div>
                                                         </div>
                                                     )}
