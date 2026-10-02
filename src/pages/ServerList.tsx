@@ -96,11 +96,11 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
                     {/* 顶部：名称和设备标签 */}
                     <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
-                            <div className="min-w-0 truncate font-mono text-base font-bold text-content">
+                            <div className="min-w-0 truncate text-base font-bold text-content">
                                 {server.name || server.hostname}
                             </div>
                             <div
-                                className="flex items-center gap-2 text-xs text-content-secondary mt-1 font-mono uppercase">
+                                className="flex items-center gap-2 text-xs text-content-secondary mt-1 tabular-nums uppercase">
                                 <span>{server.os}</span>
                                 <span className="h-2 w-px bg-line-strong"></span>
                                 <span>{server.arch}</span>
@@ -127,7 +127,7 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
                     </div>
 
                     {((isOnline && server.metrics?.host) || server.expireTime > 0) && (
-                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-content-muted">
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 tabular-nums text-xs text-content-muted">
                             {isOnline && server.metrics?.host && (
                                 <>
                                     <div className="flex items-center gap-1">
@@ -180,7 +180,7 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
                                 detail={`${formatBytes(diskUsed, 0)}/${formatBytes(diskTotal, 0)}`}
                             />
                             {temperatures.length > 0 && (
-                                <div className="mt-1 flex flex-wrap items-center gap-2 pb-2 pt-1 font-mono text-xs">
+                                <div className="mt-1 flex flex-wrap items-center gap-2 pb-2 pt-1 tabular-nums text-xs">
                                     <Thermometer className="w-3 h-3 text-warning"/>
                                     {temperatures.map((temp, index) => (
                                         <span key={index} className="flex items-center gap-1">
@@ -200,19 +200,19 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
                     {/* 离线设备仅展示资源区的错误状态，不展示可能已经陈旧的网络与流量数据。 */}
                     {isOnline && <div className="space-y-2 border-t border-line pt-2">
                         <div className="flex items-center justify-between">
-                            <div className="flex gap-3 text-xs font-mono">
-                            <span className="flex items-center gap-1 text-success/80">
+                            <div className="flex gap-3 text-xs tabular-nums">
+                            <span className="flex items-center gap-1 text-success">
                                 <ArrowDown className="w-3 h-3"/>
                                 {formatSpeed(download)}
                             </span>
-                                <span className="flex items-center gap-1 text-brand/80">
+                                <span className="flex items-center gap-1 text-brand">
                                 <ArrowUp className="w-3 h-3"/>
                                     {formatSpeed(upload)}
                             </span>
                             </div>
                         </div>
                         {isOnline && netConn && (
-                            <div className="flex gap-3 text-xs font-mono">
+                            <div className="flex gap-3 text-xs tabular-nums">
                             <span className="flex items-center gap-1">
                                 <Network className="w-3 h-3 text-success"/>
                                 <span
@@ -233,17 +233,17 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
                         )}
                         {traffic?.enabled && (
                             <div className="pt-2 border-t border-line space-y-1.5">
-                                <div className="flex items-center gap-2 text-xs text-content-muted font-mono">
+                                <div className="flex items-center gap-2 text-xs text-content-muted tabular-nums">
                                     <Activity className="w-3 h-3"/>
                                     <span>{traffic.type === 'recv' ? '进站' : traffic.type === 'send' ? '出站' : '全部'}流量</span>
                                 </div>
                                 {traffic.limit > 0 ? (
                                     <>
                                         <div className="flex items-baseline justify-between">
-                                            <span className="text-xs text-content-secondary font-mono">
+                                            <span className="text-xs text-content-secondary tabular-nums">
                                                 {formatTraffic(traffic.used)} / {formatTraffic(traffic.limit)}
                                             </span>
-                                            <span className="text-xs font-bold text-content-secondary font-mono">
+                                            <span className="text-xs font-bold text-content-secondary tabular-nums">
                                                 {trafficUsagePercent.toFixed(1)}%
                                             </span>
                                         </div>
@@ -253,12 +253,12 @@ const ServerCard: FC<ServerCardProps> = ({server}) => {
                                                 style={{width: `${trafficUsagePercent}%`}}
                                             />
                                         </div>
-                                        <div className="text-xs text-content-muted font-mono">
+                                        <div className="text-xs text-content-muted tabular-nums">
                                             重置日期: 每月 {traffic.resetDay} 号
                                         </div>
                                     </>
                                 ) : (
-                                    <div className="text-xs text-content-muted font-mono">
+                                    <div className="text-xs text-content-muted tabular-nums">
                                         已使用: {formatTraffic(traffic.used)}
                                         <div className="text-xs text-content-muted mt-1">仅统计模式</div>
                                     </div>
@@ -279,12 +279,12 @@ const NetworkStatCard = ({uploadRate, downloadRate, uploadTotal, downloadTotal}:
     uploadTotal: number;
     downloadTotal: number;
 }) => (
-    <div className="relative overflow-hidden rounded-card border border-brand/20 bg-brand-muted/40 p-4 text-brand shadow-card backdrop-blur-md sm:p-5">
+    <div className="relative overflow-hidden rounded-card border border-brand/20 bg-brand-muted p-4 text-brand shadow-card sm:p-5">
         <Network className="absolute -bottom-4 -right-4 h-20 w-20 -rotate-12 opacity-10 sm:h-24 sm:w-24"/>
         <div className="flex items-start justify-between">
             <div className="min-w-0 flex-1">
                 <div className="mb-3 text-xs font-medium text-content-secondary">网络统计</div>
-                <div className="space-y-0.5 text-xs font-mono">
+                <div className="space-y-0.5 text-xs tabular-nums">
                     <div className="flex items-center gap-1.5 sm:gap-2">
                         <ArrowUp className="h-3 w-3 flex-shrink-0 text-brand"/>
                         <span className="truncate text-content">{formatSpeed(uploadRate)}</span>
@@ -310,7 +310,7 @@ interface ServerListEmptyProps {
 
 const ServerListEmpty = ({title, description, extra}: ServerListEmptyProps) => (
     <div
-        className="flex flex-col items-center justify-center rounded-card border border-dashed border-line bg-panel p-12 text-center backdrop-blur">
+        className="flex flex-col items-center justify-center rounded-card border border-dashed border-line bg-panel p-12 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-control bg-brand-muted text-brand">
             <HardDrive className="h-7 w-7"/>
         </div>
@@ -542,7 +542,7 @@ const ServerList = () => {
                             >
                                 <span>{FILTER_LABELS[tag] ?? tag}</span>
                                 <span className={cn(
-                                    'min-w-5 rounded-full px-1.5 py-0.5 text-center font-mono text-[10px] leading-none',
+                                    'min-w-5 rounded-full px-1.5 py-0.5 text-center tabular-nums text-xs leading-none',
                                     selectedTag === tagKey ? 'bg-brand/10 text-brand' : 'bg-panel-muted text-content-muted',
                                 )}>{count}</span>
                             </button>
@@ -561,7 +561,7 @@ const ServerList = () => {
                 <>
                     {/* 桌面端表格布局 */}
                     <div
-                        className="hidden overflow-x-auto rounded-card border border-line bg-panel shadow-card backdrop-blur-md xl:block">
+                        className="hidden overflow-x-auto rounded-card border border-line bg-panel shadow-card xl:block">
                         <table className="w-full min-w-[1180px] table-fixed border-collapse text-left">
                             <thead>
                             <tr className="border-b border-line bg-panel-muted text-xs font-semibold text-content-muted">
@@ -608,17 +608,17 @@ const ServerList = () => {
                                         <td className="p-4 align-middle">
                                             <div className="flex items-center gap-4">
                                                 <div className="space-y-1">
-                                                    <div className="font-mono text-sm font-bold text-content transition-colors">
+                                                    <div className="text-sm font-bold text-content transition-colors">
                                                         {server.name}
                                                     </div>
                                                     <div
-                                                        className="flex items-center gap-2 text-xs text-content-secondary mt-1 font-mono uppercase">
+                                                        className="flex items-center gap-2 text-xs text-content-secondary mt-1 tabular-nums uppercase">
                                                         <span>{server.os}</span>
                                                         <span className="h-2 w-px bg-line-strong"></span>
                                                         <span>{server.arch}</span>
                                                     </div>
                                                     {isOnline && server.metrics?.host && (
-                                                        <div className="flex items-center gap-3 text-xs font-mono mt-1">
+                                                        <div className="flex items-center gap-3 text-xs tabular-nums mt-1">
                                                             <div
                                                                 className="flex items-center gap-1 text-content-muted">
                                                                 <Clock className="w-3 h-3"/>
@@ -662,7 +662,7 @@ const ServerList = () => {
                                                     />
                                                     {temperatures.length > 0 && (
                                                         <div
-                                                            className="flex items-center gap-2 mt-1 text-xs font-mono flex-wrap">
+                                                            className="flex items-center gap-2 mt-1 text-xs tabular-nums flex-wrap">
                                                             <Thermometer className="w-3 h-3 text-warning"/>
                                                             {temperatures.map((temp, index) => (
                                                                 <span key={index} className="flex items-center gap-1">
@@ -683,15 +683,15 @@ const ServerList = () => {
                                         </td>
 
                                         {/* Network */}
-                                        <td className="p-4 align-middle font-mono text-xs">
+                                        <td className="p-4 align-middle tabular-nums text-xs">
                                             {isOnline && <div className="flex flex-col gap-1.5 mb-1.5">
                                                 <span
-                                                    className="flex items-center gap-2 text-success/80">
+                                                    className="flex items-center gap-2 text-success">
                                                     <ArrowDown className="w-3 h-3"/>
                                                     <span>{formatSpeed(download)}</span>
                                                 </span>
                                                 <span
-                                                    className="flex items-center gap-2 text-brand/80">
+                                                    className="flex items-center gap-2 text-brand">
                                                     <ArrowUp className="w-3 h-3"/>
                                                     <span>{formatSpeed(upload)}</span>
                                                 </span>
@@ -699,19 +699,19 @@ const ServerList = () => {
                                         </td>
 
                                         {/* Traffic */}
-                                        <td className="p-4 align-middle font-mono text-xs">
+                                        <td className="p-4 align-middle tabular-nums text-xs">
                                             {isOnline && (traffic?.enabled ? (
                                                 <div className="flex flex-col gap-1.5">
-                                                    <div className="text-xs text-content-muted font-mono">
+                                                    <div className="text-xs text-content-muted tabular-nums">
                                                         {traffic.type === 'recv' ? '进站' : traffic.type === 'send' ? '出站' : '全部'}流量
                                                     </div>
                                                     {traffic.limit > 0 ? (
                                                         <>
                                                             <div className="flex items-baseline justify-between">
-                                                                <span className="text-xs text-content-secondary font-mono">
+                                                                <span className="text-xs text-content-secondary tabular-nums">
                                                                     {formatTraffic(traffic.used)} / {formatTraffic(traffic.limit)}
                                                                 </span>
-                                                                <span className="text-xs font-bold text-content-secondary font-mono">
+                                                                <span className="text-xs font-bold text-content-secondary tabular-nums">
                                                                     {trafficUsagePercent.toFixed(1)}%
                                                                 </span>
                                                             </div>
@@ -721,12 +721,12 @@ const ServerList = () => {
                                                                     style={{width: `${trafficUsagePercent}%`}}
                                                                 />
                                                             </div>
-                                                            <div className="text-xs text-content-muted font-mono">
+                                                            <div className="text-xs text-content-muted tabular-nums">
                                                                 重置日期: 每月 {traffic.resetDay} 号
                                                             </div>
                                                         </>
                                                     ) : (
-                                                        <div className="text-xs text-content-muted font-mono">
+                                                        <div className="text-xs text-content-muted tabular-nums">
                                                             已使用: {formatTraffic(traffic.used)}
                                                             <div className="text-xs text-content-muted mt-1">仅统计模式</div>
                                                         </div>
@@ -736,7 +736,7 @@ const ServerList = () => {
                                         </td>
 
                                         {/* Connections */}
-                                        <td className="p-4 align-middle font-mono text-xs">
+                                        <td className="p-4 align-middle tabular-nums text-xs">
                                             {isOnline && netConn && (
                                                 <div className="flex flex-col gap-1.5">
                                                     <div className="flex items-center gap-2">

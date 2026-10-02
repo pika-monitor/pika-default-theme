@@ -14,10 +14,10 @@ const toneStyles: Record<Tone, string> = {
 
 const toneSurfaces: Record<Tone, string> = {
     neutral: '',
-    accent: 'border-brand/20 bg-brand-muted/40',
-    success: 'dark:border-emerald-500/30 dark:bg-emerald-500/5',
-    warning: 'dark:border-amber-500/30 dark:bg-amber-500/5',
-    danger: 'dark:border-rose-500/30 dark:bg-rose-500/5',
+    accent: 'border-brand/20 bg-brand-muted',
+    success: 'dark:border-emerald-500/30 dark:bg-success-muted',
+    warning: 'dark:border-amber-500/30 dark:bg-warning-muted',
+    danger: 'dark:border-rose-500/30 dark:bg-danger-muted',
 };
 
 interface StatCardProps {
@@ -30,7 +30,7 @@ interface StatCardProps {
 }
 
 export const StatCard = ({label, value, unit, icon: Icon, tone = 'neutral', className}: StatCardProps) => (
-    <div className={cn('relative overflow-hidden rounded-card border border-line bg-panel p-4 shadow-card backdrop-blur-md sm:p-5', toneSurfaces[tone], className)}>
+    <div className={cn('relative overflow-hidden rounded-card border border-line bg-panel p-4 shadow-card sm:p-5', toneSurfaces[tone], className)}>
         {Icon && <Icon className={cn('absolute -bottom-4 -right-4 h-20 w-20 -rotate-12 opacity-10 sm:h-24 sm:w-24', toneStyles[tone])}/>} 
         <div className="relative z-10 flex items-start justify-between gap-3">
             <div className="min-w-0">

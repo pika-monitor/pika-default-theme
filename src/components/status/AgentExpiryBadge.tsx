@@ -16,7 +16,7 @@ export const AgentExpiryBadge = ({expireTime}: {expireTime?: number}) => {
         )}>
             <Calendar className="h-3 w-3 shrink-0"/>
             <span>{label}</span>
-            <time className="font-mono" dateTime={new Date(expireTime).toISOString()}>
+            <time className="tabular-nums" dateTime={new Date(expireTime).toISOString()}>
                 {new Date(expireTime).toLocaleDateString('zh-CN')}
             </time>
         </span>

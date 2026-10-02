@@ -25,7 +25,7 @@ const toDateTimeLocal = (timestamp: number): string => {
     return new Date(timestamp - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 };
 
-const controlClass = 'rounded-control border border-line bg-panel px-3 py-1.5 font-mono text-xs font-medium text-content-secondary transition-colors hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20';
+const controlClass = 'rounded-control border border-line bg-panel px-3 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20';
 
 export const TimeRangeSelector = ({value, onChange, options, enableCustom = false, customRange, onCustomRangeApply, className}: TimeRangeSelectorProps) => {
     const idPrefix = useId();
@@ -75,13 +75,13 @@ export const TimeRangeSelector = ({value, onChange, options, enableCustom = fals
                 <div id={`${idPrefix}-custom-range`} className="flex w-full flex-wrap items-center justify-end gap-2 pt-1">
                     <label htmlFor={`${idPrefix}-start`} className="sr-only">开始时间</label>
                     <input id={`${idPrefix}-start`} aria-label="开始时间" type="datetime-local" value={customStart} onChange={(event) => setCustomStart(event.target.value)} className={cn(controlClass, 'px-2 py-1')}/>
-                    <span className="font-mono text-xs text-content-muted">至</span>
+                    <span className="text-sm text-content-muted">至</span>
                     <label htmlFor={`${idPrefix}-end`} className="sr-only">结束时间</label>
                     <input id={`${idPrefix}-end`} aria-label="结束时间" type="datetime-local" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} className={cn(controlClass, 'px-2 py-1')}/>
                     <button
                         type="button"
                         onClick={() => setCustomOpen(false)}
-                        className="rounded-control border border-line bg-panel px-3 py-1.5 font-mono text-xs font-medium text-content-secondary transition-colors hover:bg-panel-hover hover:text-content"
+                        className="rounded-control border border-line bg-panel px-3 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:bg-panel-hover hover:text-content"
                     >
                         取消
                     </button>
@@ -94,7 +94,7 @@ export const TimeRangeSelector = ({value, onChange, options, enableCustom = fals
                             onChange('custom');
                             setCustomOpen(false);
                         }}
-                        className="rounded-control bg-brand px-3 py-1.5 font-mono text-xs font-bold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-panel-muted disabled:text-content-muted"
+                        className="rounded-control bg-brand px-3 py-1.5 text-sm font-bold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-panel-muted disabled:text-content-muted"
                     >
                         应用
                     </button>

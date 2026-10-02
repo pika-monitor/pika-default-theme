@@ -25,7 +25,7 @@ export const CustomTooltip = ({active, payload, label, unit = '%', className, ti
     const displayLabel = timestamp ? dayjs(timestamp).format(timeFormat) : label;
 
     return (
-        <div className={cn('rounded-control border border-line bg-panel px-3 py-2 font-mono text-xs shadow-card backdrop-blur-xl', className)}>
+        <div className={cn('rounded-control border border-line bg-panel px-3 py-2 tabular-nums text-xs shadow-card ', className)}>
             <p className="mb-2 font-semibold tracking-wide text-content">{displayLabel}</p>
             <div className="space-y-1">
                 {payload.map((entry, index) => {

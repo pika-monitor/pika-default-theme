@@ -11,7 +11,7 @@ const PublicFooter = () => {
         <footer className="border-t border-line bg-page transition-colors duration-300">
             <PublicPageContainer>
                 <div className="py-6">
-                    <div className="flex flex-col items-center justify-between gap-4 font-mono text-xs text-content-muted sm:flex-row">
+                    <div className="flex flex-col items-center justify-between gap-4 tabular-nums text-xs text-content-muted sm:flex-row">
                         <div className="flex flex-wrap items-center justify-center gap-2">
                             <span className="text-content-secondary">© {currentYear}</span>
                             <span className="text-line-strong">|</span>
@@ -25,7 +25,7 @@ const PublicFooter = () => {
                             >
                                 <span className="underline decoration-line-strong underline-offset-2">Pika Monitor</span>
                             </a>
-                            <span className="text-content-muted/80 tracking-wider">{runtime.system.version}</span>
+                            <span className="text-content-muted tracking-wider">{runtime.system.version}</span>
                             {/* ICP 备案号 */}
                             {icpCode && (
                                 <>

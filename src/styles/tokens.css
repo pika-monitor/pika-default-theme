@@ -2,22 +2,22 @@
     color-scheme: light;
 
     --theme-canvas: #f0f2f5;
-    --theme-panel: rgb(255 255 255 / 88%);
+    --theme-panel: #ffffff;
     --theme-panel-muted: #f8fafc;
     --theme-panel-hover: #f1f5f9;
     --theme-content: #1e293b;
     --theme-content-secondary: #475569;
-    --theme-content-muted: #64748b;
+    --theme-content-muted: #526175;
     --theme-line: #e2e8f0;
     --theme-line-strong: #cbd5e1;
     --theme-brand: #2563eb;
     --theme-brand-hover: #1d4ed8;
     --theme-brand-muted: #eff6ff;
-    --theme-success: #059669;
+    --theme-success: #047857;
     --theme-success-muted: #ecfdf5;
-    --theme-warning: #d97706;
+    --theme-warning: #a84b08;
     --theme-warning-muted: #fffbeb;
-    --theme-danger: #e11d48;
+    --theme-danger: #be123c;
     --theme-danger-muted: #fff1f2;
     --theme-chart-1: #2563eb;
     --theme-chart-2: #10b981;
@@ -32,23 +32,23 @@
 .dark {
     color-scheme: dark;
     --theme-canvas: #0f172a;
-    --theme-panel: rgb(30 41 59 / 88%);
-    --theme-panel-muted: rgb(51 65 85 / 72%);
-    --theme-panel-hover: rgb(51 65 85 / 88%);
+    --theme-panel: #1e293b;
+    --theme-panel-muted: #334155;
+    --theme-panel-hover: #334155;
     --theme-content: #f8fafc;
     --theme-content-secondary: #cbd5e1;
-    --theme-content-muted: #94a3b8;
+    --theme-content-muted: #a8b6c9;
     --theme-line: rgb(148 163 184 / 20%);
     --theme-line-strong: rgb(148 163 184 / 38%);
-    --theme-brand: #60a5fa;
+    --theme-brand: #7ab7ff;
     --theme-brand-hover: #93c5fd;
-    --theme-brand-muted: rgb(59 130 246 / 14%);
+    --theme-brand-muted: #1a2b49;
     --theme-success: #34d399;
-    --theme-success-muted: rgb(16 185 129 / 10%);
+    --theme-success-muted: #112f2d;
     --theme-warning: #fbbf24;
-    --theme-warning-muted: rgb(245 158 11 / 10%);
-    --theme-danger: #fb7185;
-    --theme-danger-muted: rgb(244 63 94 / 10%);
+    --theme-warning-muted: #262527;
+    --theme-danger: #ff8aa0;
+    --theme-danger-muted: #262033;
     --theme-chart-1: #60a5fa;
     --theme-chart-2: #34d399;
     --theme-chart-3: #fb923c;
@@ -58,6 +58,13 @@
 }
 
 @theme inline {
+    /* Explicit CJK fallbacks keep UI and monospace text consistent on Windows. */
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    --font-mono: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", monospace;
+    /* Secondary information remains readable at a device pixel ratio of one. */
+    --text-xs: 0.8125rem;
+    --text-xs--line-height: calc(18 / 13);
+
     --color-page: var(--theme-canvas);
     --color-panel: var(--theme-panel);
     --color-panel-muted: var(--theme-panel-muted);

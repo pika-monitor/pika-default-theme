@@ -20,7 +20,7 @@ const navigationStyles = {
     mobile: {
         base: 'gap-3 rounded-control border p-4',
         active: 'border-brand/25 bg-brand-muted text-brand',
-        inactive: 'border-line bg-panel/60 text-content-secondary hover:border-line-strong hover:bg-panel-hover hover:text-content',
+        inactive: 'border-line bg-panel text-content-secondary hover:border-line-strong hover:bg-panel-hover hover:text-content',
     },
 };
 
@@ -90,7 +90,7 @@ const HeaderClock = () => {
         <time
             dateTime={currentTime.toISOString()}
             title={`当前浏览器时区：${timeZone}`}
-            className="hidden flex-col items-end font-mono text-xs xl:flex"
+            className="hidden flex-col items-end tabular-nums text-xs xl:flex"
         >
             <span className="font-bold text-content">
                 {currentTime.toLocaleTimeString()}
@@ -168,7 +168,7 @@ const PublicHeader = () => {
 
     return (
         <>
-            <header className="fixed inset-x-0 top-0 z-40 border-b border-line bg-white/80 backdrop-blur-xl transition-colors duration-300 dark:bg-slate-950/85">
+            <header className="fixed inset-x-0 top-0 z-40 border-b border-line bg-white transition-colors duration-300 dark:bg-slate-950">
                 <PublicPageContainer className="flex h-20 items-center justify-between">
                     <div className="flex min-w-0 items-center gap-8">
                         <Link to="/" className="flex min-w-0 items-center gap-3" aria-label={`${runtime.system.nameZh}首页`}>
@@ -184,7 +184,7 @@ const PublicHeader = () => {
                                 <h1 className="truncate text-xl font-black uppercase italic tracking-widest text-content sm:text-2xl">
                                     <span className="bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-700 bg-clip-text text-transparent dark:from-blue-400 dark:via-indigo-400 dark:to-blue-300">{leftName}</span>{rightName}
                                 </h1>
-                                <p className="mt-0.5 truncate font-mono text-xs font-medium uppercase leading-4 tracking-[0.16em] text-blue-600/85 dark:text-blue-400/85 sm:text-[13px] sm:leading-5 sm:tracking-[0.2em]">
+                                <p className="mt-0.5 truncate text-sm font-medium leading-5 text-blue-600 dark:text-blue-400">
                                     {runtime.system.nameZh}
                                 </p>
                             </div>
@@ -225,7 +225,7 @@ const PublicHeader = () => {
             {mobileMenuOpen && (
                 <div
                     id="public-mobile-menu"
-                    className="fixed inset-0 top-20 z-30 bg-white/95 backdrop-blur-xl dark:bg-slate-950/95 md:hidden"
+                    className="fixed inset-0 top-20 z-30 bg-white dark:bg-slate-950 md:hidden"
                 >
                     <div className="flex flex-col gap-4 p-4">
                         <PublicNavigation mobile onNavigate={() => setMobileMenuOpen(false)}/>

@@ -39,7 +39,7 @@ export const Card = ({
 
     return (
         <div className={cn(
-            'group relative overflow-hidden rounded-card border border-line shadow-card backdrop-blur-md transition-all duration-200',
+            'group relative overflow-hidden rounded-card border border-line shadow-card transition-all duration-200',
             variantStyles[variant],
             interactive && 'cursor-pointer hover:border-line-strong hover:bg-panel-hover',
         )}>

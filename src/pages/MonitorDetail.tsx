@@ -52,7 +52,7 @@ const MonitorHero = ({monitor, onBack}: MonitorHeroProps) => {
                         <h1 className="truncate text-2xl font-bold tracking-wide text-content sm:text-3xl">{monitor.name}</h1>
                         <StatusBadge status={monitor.status}/>
                     </div>
-                    <p className="truncate font-mono text-sm text-content-secondary/80">
+                    <p className="truncate font-mono text-sm text-content-secondary">
                         {getPublicMonitorTarget(monitor)}
                     </p>
                 </div>
@@ -81,13 +81,13 @@ const MonitorHero = ({monitor, onBack}: MonitorHeroProps) => {
             {/* 证书信息（如果存在证书数据）*/}
             {monitor.certExpiryTime > 0 && (
                 <div className="mt-6 flex flex-col gap-3 border-t border-line pt-4">
-                    <span className="text-xs text-content-secondary font-mono">SSL 证书:</span>
+                    <span className="text-xs text-content-secondary">SSL 证书:</span>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                         <CertificateBadge
                             expiryTime={monitor.certExpiryTime}
                             daysLeft={monitor.certDaysLeft}
                         />
-                        <span className="text-xs text-content-muted font-mono break-all sm:break-normal">
+                        <span className="text-xs text-content-muted tabular-nums break-all sm:break-normal">
                             到期时间: {formatDateTime(monitor.certExpiryTime)}
                         </span>
                     </div>
@@ -108,7 +108,7 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
     if (monitorStats.length === 0) {
         return (
             <div className="text-center py-12 text-content-secondary">
-                <p className="text-sm font-mono">暂无探针数据</p>
+                <p className="text-sm">暂无探针数据</p>
             </div>
         );
     }
@@ -132,7 +132,7 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
                                         style={{backgroundColor: color}}
                                     />
                                     <MapPin className="h-3.5 w-3.5 text-content-secondary flex-shrink-0"/>
-                                    <span className="font-mono text-sm text-content truncate">
+                                    <span className="tabular-nums text-sm text-content truncate">
                                         {stat.agentName || stat.agentId.substring(0, 8)}
                                     </span>
                                 </div>
@@ -143,11 +143,11 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
                             <div className="flex items-center justify-between gap-4 text-sm">
                                 <div className="flex items-center gap-2">
                                     <Clock className="h-4 w-4 text-content-secondary"/>
-                                    <span className="font-semibold text-content font-mono">
+                                    <span className="font-semibold text-content tabular-nums">
                                         {stat.status === 'up' ? formatTime(stat.responseTime) : '—'}
                                     </span>
                                 </div>
-                                <span className="text-xs text-content-secondary font-mono">
+                                <span className="text-xs text-content-secondary tabular-nums">
                                     {formatDateTime(stat.checkedAt)}
                                 </span>
                             </div>
@@ -157,7 +157,7 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
                                 <div className="pt-2 border-t border-line">
                                     <div className="flex items-center gap-2">
                                         <span
-                                            className="text-xs text-content-secondary font-mono">证书:</span>
+                                            className="text-xs text-content-secondary">证书:</span>
                                         <CertificateBadge
                                             expiryTime={stat.certExpiryTime}
                                             daysLeft={stat.certDaysLeft}
@@ -171,7 +171,7 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
                                 <div className="pt-2 border-t border-line">
                                     <div className="flex items-start gap-2">
                                         <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-danger"/>
-                                        <span className="break-words font-mono text-xs text-danger">
+                                        <span className="break-words tabular-nums text-xs text-danger">
                                             {stat.message}
                                         </span>
                                     </div>
@@ -223,7 +223,7 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
                                             />
                                         <div className="flex items-center gap-2">
                                             <MapPin className="h-3.5 w-3.5 text-content-secondary"/>
-                                            <span className="font-mono text-sm text-content">
+                                            <span className="tabular-nums text-sm text-content">
                                                     {stat.agentName || stat.agentId.substring(0, 8)}
                                                 </span>
                                         </div>
@@ -236,12 +236,12 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
                                     <div className="flex items-center gap-2">
                                         <Clock className="h-4 w-4 text-content-secondary"/>
                                         <span
-                                            className="text-sm font-semibold text-content font-mono">
+                                            className="text-sm font-semibold text-content tabular-nums">
                                                 {stat.status === 'up' ? formatTime(stat.responseTime) : '—'}
                                             </span>
                                     </div>
                                 </td>
-                                <td className="px-4 py-4 text-sm text-content-secondary font-mono">
+                                <td className="px-4 py-4 text-sm text-content-secondary tabular-nums">
                                     {formatDateTime(stat.checkedAt)}
                                 </td>
                                 {monitorType === 'https' && (
@@ -262,7 +262,7 @@ const AgentStatsTable = ({monitorStats, monitorType}: AgentStatsTableProps) => {
                                             <AlertCircle
                                                 className="mt-0.5 h-4 w-4 flex-shrink-0 text-danger"/>
                                             <span
-                                                className="line-clamp-2 break-words font-mono text-xs text-danger">
+                                                className="line-clamp-2 break-words tabular-nums text-xs text-danger">
                                                     {stat.message}
                                                 </span>
                                         </div>
@@ -533,7 +533,7 @@ const ResponseTimeChart = ({monitorId, monitorStats, available}: ResponseTimeCha
     if (!available) {
         return (
             <Card title="响应时间趋势">
-                <div className="flex items-center gap-2 font-mono text-xs text-danger">
+                <div className="flex items-center gap-2 tabular-nums text-xs text-danger">
                     <AlertCircle className="h-4 w-4 shrink-0"/>
                     <span>服务当前不可用，已隐藏可能过期的响应时间与趋势数据。</span>
                 </div>
@@ -620,15 +620,15 @@ const ResponseTimeChart = ({monitorId, monitorStats, available}: ResponseTimeCha
                                 scale="time"
                                 domain={['dataMin', 'dataMax']}
                                 tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
-                                className="text-xs text-content-secondary font-mono"
+                                className="text-xs text-content-secondary tabular-nums"
                                 stroke="currentColor"
                                 tickLine={false}
                                 axisLine={false}
-                                angle={-15}
-                                textAnchor="end"
+                                minTickGap={24}
+                                textAnchor="middle"
                             />
                             <YAxis
-                                className="text-xs text-content-secondary font-mono"
+                                className="text-xs text-content-secondary tabular-nums"
                                 stroke="currentColor"
                                 tickLine={false}
                                 axisLine={false}

@@ -8,7 +8,7 @@ const NotFound = () => (
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-panel-muted text-content-muted">
                 <SearchX className="h-8 w-8"/>
             </div>
-            <p className="mt-5 font-mono text-xs font-semibold uppercase tracking-[0.24em] text-brand">404</p>
+            <p className="mt-5 tabular-nums text-xs font-semibold uppercase tracking-[0.24em] text-brand">404</p>
             <h1 className="mt-2 text-2xl font-bold text-content">页面不存在</h1>
             <p className="mt-2 text-sm text-content-secondary">访问地址可能已失效，或者页面已经被移动。</p>
             <Link

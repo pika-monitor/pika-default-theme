@@ -37,7 +37,7 @@ export const StatusSummary = ({title, current, total, currentLabel, status, sign
     return (
         <section
             aria-label={title}
-            className="relative overflow-hidden rounded-card border border-line bg-panel px-4 py-3 text-sm shadow-card backdrop-blur-md"
+            className="relative overflow-hidden rounded-card border border-line bg-panel px-4 py-3 text-sm shadow-card "
         >
             <div className="relative z-10 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-wrap items-center gap-2 text-content">

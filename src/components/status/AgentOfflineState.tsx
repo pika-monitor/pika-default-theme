@@ -12,7 +12,7 @@ export const AgentOfflineState = ({compact = false}: {compact?: boolean}) => (
         </span>
         <span className="flex min-w-0 flex-col leading-tight">
             <span className="whitespace-nowrap text-xs font-semibold">连接已断开</span>
-            {!compact && <span className="mt-0.5 whitespace-nowrap text-[10px] font-normal text-danger/70">等待重连</span>}
+            {!compact && <span className="mt-0.5 whitespace-nowrap text-xs font-normal text-danger">等待重连</span>}
         </span>
     </div>
 );

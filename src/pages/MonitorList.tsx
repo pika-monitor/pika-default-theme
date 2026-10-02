@@ -88,7 +88,7 @@ const MonitorCard = ({monitor, displayMode, sparkline}: {
                     <h3 className="truncate text-sm font-bold tracking-wide text-content transition-colors group-hover:text-brand">
                         {monitor.name}
                     </h3>
-                    <div className="mb-0.5 truncate font-mono text-xs tracking-wider text-content-secondary/80">
+                    <div className="mb-0.5 truncate font-mono text-xs text-content-secondary">
                         {publicTarget}
                     </div>
                 </div>
@@ -131,7 +131,7 @@ const MonitorCard = ({monitor, displayMode, sparkline}: {
                     ) : (
                         <>
                             <p className="text-xs text-content-secondary mb-1">上次检测</p>
-                            <p className="md:text-sm text-xs text-content-secondary font-mono">
+                            <p className="md:text-sm text-xs text-content-secondary tabular-nums">
                                 {formatDateTime(monitor.lastCheckTime)}
                             </p>
                         </>
@@ -162,7 +162,7 @@ const MonitorListSpinner = () => (
     <div className="flex min-h-[400px] w-full items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-content-secondary">
             <Loader2 className="h-8 w-8 animate-spin text-content-secondary"/>
-            <span className="text-sm font-mono">加载监控数据中...</span>
+            <span className="text-sm">加载监控数据中...</span>
         </div>
     </div>
 );
@@ -170,7 +170,7 @@ const MonitorListSpinner = () => (
 const MonitorListEmpty = () => (
     <div className="flex min-h-[400px] flex-col items-center justify-center text-content-secondary">
         <Shield className="mb-4 h-16 w-16 opacity-20"/>
-        <p className="text-lg font-medium font-mono">暂无监控数据</p>
+        <p className="text-lg font-medium">暂无监控数据</p>
         <p className="mt-2 text-sm text-content-secondary">请先在管理后台添加监控任务</p>
     </div>
 );
@@ -324,13 +324,13 @@ const MonitorList = () => {
                 <div className="flex flex-wrap gap-4 items-center w-full md:w-auto">
                     {/* 显示模式切换 */}
                     <div className="flex items-center gap-1 rounded-control border border-line bg-panel-muted p-1">
-                        <span className="text-xs text-content-secondary px-2 font-mono">卡片指标:</span>
+                        <span className="text-xs text-content-secondary px-2">卡片指标:</span>
                         <button
                             type="button"
                             onClick={() => setDisplayMode('avg')}
                             aria-pressed={displayMode === 'avg'}
                             className={cn(
-                                "px-3 py-1.5 text-xs font-medium rounded transition-all flex items-center gap-1 font-mono cursor-pointer",
+                                "px-3 py-1.5 text-xs font-medium rounded transition-all flex items-center gap-1 cursor-pointer",
                                 displayMode === 'avg'
                                     ? 'border border-brand/30 bg-brand-muted text-brand'
                                     : 'text-content-secondary hover:text-content'
@@ -343,7 +343,7 @@ const MonitorList = () => {
                             onClick={() => setDisplayMode('max')}
                             aria-pressed={displayMode === 'max'}
                             className={cn(
-                                "px-3 py-1.5 text-xs font-medium rounded transition-all flex items-center gap-1 font-mono cursor-pointer",
+                                "px-3 py-1.5 text-xs font-medium rounded transition-all flex items-center gap-1 cursor-pointer",
                                 displayMode === 'max'
                                     ? 'border border-brand/30 bg-brand-muted text-brand'
                                     : 'text-content-secondary hover:text-content'

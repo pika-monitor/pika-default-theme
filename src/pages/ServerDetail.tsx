@@ -145,7 +145,7 @@ const ServerHero = ({agent, latestMetrics, onBack}: ServerHeroProps) => {
                                     <h1 className="text-3xl font-bold text-content">{displayName}</h1>
                                     {isOnline && <StatusBadge status="healthy"/>}
                                 </div>
-                                <p className="mt-2 text-sm text-content-secondary font-mono">
+                                <p className="mt-2 text-sm text-content-secondary tabular-nums">
                                     {[agent.hostname].filter(Boolean).join(' · ') || '-'}
                                 </p>
                                 {(!isOnline || agent.expireTime > 0) && (
@@ -165,7 +165,7 @@ const ServerHero = ({agent, latestMetrics, onBack}: ServerHeroProps) => {
                     </div>
                 </div>
                 <div
-                    className="flex flex-wrap items-center gap-3 border-t border-line pt-4 font-mono text-xs text-content-secondary">
+                    className="flex flex-wrap items-center gap-3 border-t border-line pt-4 tabular-nums text-xs text-content-secondary">
                     <span>探针 ID：{agent.id}</span>
                     <span className="hidden h-1 w-1 rounded-full bg-line-strong sm:inline-block"/>
                     <span>版本：{agent.version || '-'}</span>
@@ -488,7 +488,7 @@ const GpuMonitorSection = ({latestMetrics}: {latestMetrics: LatestMetrics | null
                             <div className="flex items-center gap-2">
                                 <span className="flex h-9 w-9 items-center justify-center rounded-control bg-brand-muted text-brand"><Zap className="h-4 w-4"/></span>
                                 <div>
-                                    <p className="font-mono text-sm font-bold text-content">GPU {gpu.index}</p>
+                                    <p className="tabular-nums text-sm font-bold text-content">GPU {gpu.index}</p>
                                     <p className="text-xs text-content-secondary">{gpu.name}</p>
                                 </div>
                             </div>
@@ -615,9 +615,9 @@ const CpuChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: CpuCh
                             domain={['dataMin', 'dataMax']}
                             tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
                             stroke="currentColor"
-                            angle={-15}
-                            textAnchor="end"
-                            className="text-xs text-content-secondary font-mono"
+                            minTickGap={24}
+                            textAnchor="middle"
+                            className="text-xs text-content-secondary tabular-nums"
                         />
                         <YAxis
                             domain={[0, 100]}
@@ -715,9 +715,9 @@ const MemoryChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
                             domain={['dataMin', 'dataMax']}
                             tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
                             stroke="currentColor"
-                            angle={-15}
-                            textAnchor="end"
-                            className="text-xs text-content-secondary font-mono"
+                            minTickGap={24}
+                            textAnchor="middle"
+                            className="text-xs text-content-secondary tabular-nums"
                         />
                         <YAxis
                             domain={[0, 100]}
@@ -847,12 +847,13 @@ const DiskIOChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
                             domain={['dataMin', 'dataMax']}
                             tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
                             stroke="currentColor"
-                            angle={-15}
-                            textAnchor="end"
-                            className="text-xs text-content-secondary font-mono"
+                            minTickGap={24}
+                            textAnchor="middle"
+                            className="text-xs text-content-secondary tabular-nums"
                             height={45}
                         />
                         <YAxis
+                            width={72}
                             stroke="currentColor"
                             className="stroke-content-muted text-xs"
                             tickFormatter={(value) => `${value} MB`}
@@ -993,7 +994,7 @@ const NetworkChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: C
             aria-label="网络接口"
             value={selectedInterface}
             onChange={(e) => setSelectedInterface(e.target.value)}
-            className="rounded-control border border-line bg-panel-muted px-3 py-1.5 text-xs font-mono text-content-secondary hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            className="rounded-control border border-line bg-panel-muted px-3 py-1.5 text-sm text-content-secondary hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
         >
             {availableInterfaces.map((iface) => (
                 <option key={iface} value={iface}>
@@ -1037,12 +1038,13 @@ const NetworkChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: C
                             domain={['dataMin', 'dataMax']}
                             tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
                             stroke="currentColor"
-                            angle={-15}
-                            textAnchor="end"
-                            className="text-xs text-content-secondary font-mono"
+                            minTickGap={24}
+                            textAnchor="middle"
+                            className="text-xs text-content-secondary tabular-nums"
                             height={45}
                         />
                         <YAxis
+                            width={72}
                             stroke="currentColor"
                             className="stroke-content-muted text-xs"
                             tickFormatter={(value) => `${value} MB`}
@@ -1168,9 +1170,9 @@ const NetworkConnectionChart = ({agentId, timeRange, start, end, isLive, latestM
                             domain={['dataMin', 'dataMax']}
                             tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
                             stroke="currentColor"
-                            angle={-15}
-                            textAnchor="end"
-                            className="text-xs text-content-secondary font-mono"
+                            minTickGap={24}
+                            textAnchor="middle"
+                            className="text-xs text-content-secondary tabular-nums"
                             height={45}
                         />
                         <YAxis
@@ -1312,13 +1314,13 @@ const GpuChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBase) 
                         tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
                         stroke="currentColor"
                         className="stroke-content-muted"
-                        style={{fontSize: '12px'}}
+                        style={{fontSize: '13px'}}
                     />
                     <YAxis
                         yAxisId="left"
                         stroke="currentColor"
                         className="stroke-content-muted"
-                        style={{fontSize: '12px'}}
+                        style={{fontSize: '13px'}}
                         tickFormatter={(value) => `${value}%`}
                     />
                     <YAxis
@@ -1326,7 +1328,7 @@ const GpuChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBase) 
                         orientation="right"
                         stroke="currentColor"
                         className="stroke-content-muted"
-                        style={{fontSize: '12px'}}
+                        style={{fontSize: '13px'}}
                         tickFormatter={(value) => `${value}°C`}
                     />
                     <Tooltip content={<CustomTooltip unit=""/>}/>
@@ -1429,7 +1431,7 @@ const TemperatureChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPro
             aria-label="温度传感器类型"
             value={selectedTempType}
             onChange={(e) => setSelectedTempType(e.target.value)}
-            className="rounded-control border border-line bg-panel-muted px-3 py-1.5 text-xs font-mono text-content-secondary hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            className="rounded-control border border-line bg-panel-muted px-3 py-1.5 text-sm text-content-secondary hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
         >
             <option value="all">所有类型</option>
             {temperatureTypes.map((type) => (
@@ -1468,9 +1470,9 @@ const TemperatureChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPro
                         domain={['dataMin', 'dataMax']}
                         tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
                         stroke="currentColor"
-                        angle={-15}
-                        textAnchor="end"
-                        className="text-xs text-content-secondary font-mono"
+                        minTickGap={24}
+                        textAnchor="middle"
+                        className="text-xs text-content-secondary tabular-nums"
                         height={45}
                     />
                     <YAxis
@@ -1869,9 +1871,9 @@ const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBa
                                 domain={['dataMin', 'dataMax']}
                                 tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
                                 stroke="currentColor"
-                                angle={-15}
-                                textAnchor="end"
-                                className="text-xs text-content-secondary font-mono"
+                                minTickGap={24}
+                                textAnchor="middle"
+                                className="text-xs text-content-secondary tabular-nums"
                                 height={45}
                             />
                             <YAxis
