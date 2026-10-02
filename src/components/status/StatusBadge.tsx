@@ -10,10 +10,10 @@ export const normalizeHealthStatus = (status: string | number | boolean | undefi
 };
 
 const presentation: Record<HealthStatus, {label: string; className: string; dot: string}> = {
-    healthy: {label: '正常', className: 'border-success/30 bg-success-muted text-success', dot: 'bg-success'},
-    degraded: {label: '需关注', className: 'border-warning/30 bg-warning-muted text-warning', dot: 'bg-warning'},
-    down: {label: '异常', className: 'border-danger/30 bg-danger-muted text-danger', dot: 'bg-danger'},
-    unknown: {label: '未知', className: 'border-line bg-panel-muted text-content-muted', dot: 'bg-content-muted'},
+    healthy: {label: '正常', className: 'bg-success-muted text-success', dot: 'bg-success'},
+    degraded: {label: '需关注', className: 'bg-warning-muted text-warning', dot: 'bg-warning'},
+    down: {label: '异常', className: 'bg-danger-muted text-danger', dot: 'bg-danger'},
+    unknown: {label: '未知', className: 'bg-panel-muted text-content-muted', dot: 'bg-content-muted'},
 };
 
 interface StatusBadgeProps {
@@ -27,9 +27,9 @@ export const StatusBadge = ({status, label, showDot = true, className}: StatusBa
     const normalized = normalizeHealthStatus(status);
     const item = presentation[normalized];
     return (
-        <span className={cn('inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium', item.className, className)}>
-            {showDot && <span className={cn('h-1.5 w-1.5 rounded-full', item.dot, normalized === 'down' && 'animate-pulse')} aria-hidden="true"/>}
-            {label ?? item.label}
+        <span className={cn('inline-flex h-6 w-fit shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 text-xs font-medium leading-none align-middle', item.className, className)}>
+            {showDot && <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', item.dot)} aria-hidden="true"/>}
+            <span>{label ?? item.label}</span>
         </span>
     );
 };

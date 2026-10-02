@@ -184,7 +184,7 @@ const PublicHeader = () => {
                                 <h1 className="truncate text-xl font-black uppercase italic tracking-widest text-content sm:text-2xl">
                                     <span className="bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-700 bg-clip-text text-transparent dark:from-blue-400 dark:via-indigo-400 dark:to-blue-300">{leftName}</span>{rightName}
                                 </h1>
-                                <p className="mt-0.5 truncate text-sm font-medium leading-5 text-blue-600 dark:text-blue-400">
+                                <p className="mt-0.5 truncate text-sm font-medium leading-5 tracking-[0.16em] text-blue-600 dark:text-blue-400 sm:tracking-[0.2em]">
                                     {runtime.system.nameZh}
                                 </p>
                             </div>
