@@ -13,7 +13,7 @@ const navigation = [
 
 const navigationStyles = {
     desktop: {
-        base: 'w-24 justify-center gap-2 py-2',
+        base: 'gap-2 py-2',
         active: 'text-brand',
         inactive: 'text-content-muted hover:text-content',
     },
@@ -45,7 +45,7 @@ interface AdminEntryProps {
 }
 
 const PublicNavigation = ({mobile = false, onNavigate}: NavigationProps) => (
-    <nav className={mobile ? 'flex flex-col gap-3' : 'hidden items-center gap-8 md:flex'}>
+    <nav className={mobile ? 'flex flex-col gap-3' : 'hidden items-center gap-4 md:flex'}>
         {navigation.map(({icon: Icon, label, to, end}) => {
             const styles = mobile ? navigationStyles.mobile : navigationStyles.desktop;
 
