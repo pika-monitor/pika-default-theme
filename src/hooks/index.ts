@@ -1,8 +1,8 @@
-import {useEffect, useRef, useState} from 'react';
+import {useEffect, useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {pika} from '../api';
-import {POLLING_INTERVALS} from '../constants';
-import type {Agent, LatestMetrics, MetricsAggregation, MetricsParams, MetricsResponse} from '../types';
+import {LIVE_RANGE, POLLING_INTERVALS} from '../constants';
+import type {Agent, LatestMetrics, MetricsAggregation, MetricsParams, MetricsResponse, LiveMetricsResponse} from '../types';
 
 interface UseMetricsQueryOptions {
     agentId: string;
@@ -37,7 +37,7 @@ export const useLatestMetricsQuery = (agentId?: string, intervalMs: number = POL
 export const useMetricsQuery = ({agentId, type, range, start, end, interfaceName, aggregation, refetchIntervalMs}: UseMetricsQueryOptions) => {
     return useQuery({
         queryKey: ['agent', agentId, 'metrics', type, range, start, end, interfaceName, aggregation],
-        queryFn: () =>
+        queryFn: ({signal}) =>
             pika.getMetrics<MetricsResponse>(agentId, {
                 type,
                 range: start !== undefined && end !== undefined ? undefined : range,
@@ -45,77 +45,81 @@ export const useMetricsQuery = ({agentId, type, range, start, end, interfaceName
                 end,
                 interface: interfaceName,
                 aggregation,
-            }),
+            }, signal),
         enabled: !!agentId,
         refetchInterval: refetchIntervalMs && refetchIntervalMs > 0 ? refetchIntervalMs : false,
     });
 };
 
-export const useNetworkInterfacesQuery = (agentId?: string) => {
+interface TrendMetricsQueryOptions extends Omit<UseMetricsQueryOptions, 'type' | 'range' | 'aggregation' | 'refetchIntervalMs'> {
+    type: NonNullable<MetricsParams['type']>;
+    timeRange: string;
+    liveEnabled?: boolean;
+}
+
+// All live observers share one batch request, independent of metric/interface.
+export const getLiveMetricsQueryOptions = (agentId: string) => ({
+    queryKey: ['agent', agentId, 'trend', 'live'],
+    queryFn: ({signal}: {signal: AbortSignal}) => pika.getLiveMetrics(agentId, signal),
+    enabled: !!agentId,
+    staleTime: 0,
+    refetchInterval: POLLING_INTERVALS.liveHistory,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchOnMount: 'always' as const,
+});
+
+export const getTrendMetricsQueryOptions = ({agentId, type, timeRange, start, end, interfaceName, liveEnabled = true}: TrendMetricsQueryOptions) => {
+    const isLive = timeRange === LIVE_RANGE;
+    const params: MetricsParams = {type, range: start !== undefined && end !== undefined ? undefined : timeRange, start, end, interface: interfaceName};
+    return {
+        ...(isLive ? getLiveMetricsQueryOptions(agentId) : {
+            queryKey: ['agent', agentId, 'trend', type, params],
+            enabled: !!agentId,
+            staleTime: 0,
+            refetchInterval: false as const,
+            refetchOnWindowFocus: false,
+        }),
+        enabled: !!agentId,
+        refetchInterval: isLive && liveEnabled ? POLLING_INTERVALS.liveHistory : (false as const),
+        queryFn: ({signal}: {signal: AbortSignal}): Promise<LiveMetricsResponse | MetricsResponse> => isLive
+            ? pika.getLiveMetrics(agentId, signal)
+            : pika.getMetrics<MetricsResponse>(agentId, params, signal),
+        select: (response: LiveMetricsResponse | MetricsResponse): MetricsResponse => {
+            if (!('generatedAt' in response)) return response;
+            const from = type === 'monitor' ? response.monitorStart : response.start;
+            const series = response.series[type] ?? [];
+            const selectedSeries = type === 'network'
+                ? series.filter(entry => (entry.labels?.interface ?? '') === (interfaceName ?? ''))
+                : series;
+            const latestSampleAt = type === 'network'
+                ? selectedSeries.reduce((latest, entry) => entry.data.reduce((value, point) => Math.max(value, point.timestamp), latest), 0) || undefined
+                : response.latestSampleAt[type];
+            return {
+                agentId: response.agentId, type, range: `${from}-${response.end}`,
+                start: from, end: response.end,
+                series: selectedSeries,
+                latestSampleAt,
+                historyError: response.historyError,
+            };
+        },
+    };
+};
+
+export const useTrendMetricsQuery = (options: TrendMetricsQueryOptions) => useQuery(getTrendMetricsQueryOptions(options));
+
+export const useLiveMetricsQuery = (agentId: string, enabled: boolean, poll = true) => useQuery({...getLiveMetricsQueryOptions(agentId), enabled: !!agentId && enabled, refetchInterval: poll ? POLLING_INTERVALS.liveHistory : false});
+
+export const useNetworkInterfacesQuery = (agentId?: string, enabled = true) => {
     return useQuery({
         queryKey: ['agent', agentId, 'network-interfaces'],
         queryFn: () => pika.getNetworkInterfaces(agentId!),
-        enabled: !!agentId,
+        enabled: !!agentId && enabled,
         staleTime: POLLING_INTERVALS.metadata,
         refetchInterval: POLLING_INTERVALS.metadata,
     });
 };
-
-export function useLiveBuffer<T extends { timestamp: number }>(
-    initial: T[],
-    isLive: boolean,
-    livePoint: T | null,
-    windowMs: number,
-    resetKey?: unknown,
-): T[] {
-    const [buffer, setBuffer] = useState<T[]>([]);
-    const lastTsRef = useRef<number>(0);
-    const seededRef = useRef<boolean>(false);
-
-    useEffect(() => {
-        seededRef.current = false;
-        lastTsRef.current = 0;
-        setBuffer([]);
-    }, [isLive, resetKey]);
-
-    useEffect(() => {
-        if (!isLive) return;
-        if (seededRef.current) return;
-        if (!initial || initial.length === 0) return;
-        seededRef.current = true;
-
-        const initLastTs = initial[initial.length - 1].timestamp;
-        setBuffer(prev => {
-            if (prev.length === 0) {
-                return initial.slice();
-            }
-            const earliestExisting = prev[0].timestamp;
-            const olderHistory = initial.filter(p => p.timestamp < earliestExisting);
-            return olderHistory.length > 0 ? [...olderHistory, ...prev] : prev;
-        });
-        if (initLastTs > lastTsRef.current) {
-            lastTsRef.current = initLastTs;
-        }
-    }, [isLive, initial, resetKey]);
-
-    useEffect(() => {
-        if (!isLive || !livePoint) return;
-        const ts = livePoint.timestamp;
-        if (!Number.isFinite(ts) || ts <= 0) return;
-        if (ts <= lastTsRef.current) return;
-        lastTsRef.current = ts;
-
-        setBuffer(prev => {
-            const next = prev.length === 0 ? [livePoint] : [...prev, livePoint];
-            const cutoff = ts - windowMs;
-            let drop = 0;
-            while (drop < next.length && next[drop].timestamp < cutoff) drop++;
-            return drop > 0 ? next.slice(drop) : next;
-        });
-    }, [livePoint, isLive, windowMs]);
-
-    return isLive ? buffer : initial;
-}
 
 const MOBILE_BREAKPOINT = 768;
 

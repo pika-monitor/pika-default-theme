@@ -47,7 +47,7 @@ export const Card = ({
                 {hasHeader && (
                     <div className="flex flex-col gap-3 border-b border-line pb-3 sm:flex-row sm:items-start sm:justify-between sm:pb-4">
                         {title && <h2 className="min-w-0 text-base font-semibold text-content sm:text-lg">{title}</h2>}
-                        {action && <div className="shrink-0">{action}</div>}
+                        {action && <div className="max-w-full shrink-0">{action}</div>}
                     </div>
                 )}
                 <div className={cn(hasHeader && 'pt-4')}>{children}</div>

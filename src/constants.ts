@@ -1,18 +1,20 @@
 import type {TimeRangeOption} from './types';
 
 export const LIVE_RANGE = 'live';
-export const LIVE_INITIAL_RANGE = '2m';
-export const LIVE_WINDOW_MS = 2 * 60 * 1000;
+export const LIVE_WINDOW_MS = 5 * 60 * 1000;
+export const LIVE_MONITOR_WINDOW_MS = 15 * 60 * 1000;
+
+export const METRIC_INTERVALS = {cpu: 2000, memory: 5000, disk_io: 2000, network: 2000, network_connection: 10000, gpu: 5000, temperature: 15000, monitor: 10000} as const;
 
 export const POLLING_INTERVALS = {
     serverList: 5000,
     latestMetrics: 5000,
-    liveHistory: 10000,
+    liveHistory: 2000,
     metadata: 30000,
 } as const;
 
 export const SERVER_TIME_RANGE_OPTIONS: TimeRangeOption[] = [
-    {label: '自动刷新', value: LIVE_RANGE},
+    {label: '实时', value: LIVE_RANGE},
     {label: '15分钟', value: '15m'},
     {label: '30分钟', value: '30m'},
     {label: '1小时', value: '1h'},

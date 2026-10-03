@@ -1,4 +1,4 @@
-import {memo, type ReactNode, useEffect, useMemo, useState} from 'react';
+import {memo, type ReactNode, useEffect, useMemo, useRef, useState} from 'react';
 import {useNavigate, useParams} from 'react-router-dom';
 import {Area, AreaChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts';
 import {
@@ -15,13 +15,14 @@ import {
     Zap
 } from 'lucide-react';
 import type {LucideIcon} from 'lucide-react';
-import type {Agent, LatestMetrics} from '../types';
+import type {Agent, LatestMetrics, MetricsResponse} from '../types';
 import {PikaAPIError} from '../api';
 import {
     INTERFACE_COLORS,
-    LIVE_INITIAL_RANGE,
     LIVE_RANGE,
     LIVE_WINDOW_MS,
+    LIVE_MONITOR_WINDOW_MS,
+    METRIC_INTERVALS,
     POLLING_INTERVALS,
     SERVER_TIME_RANGE_OPTIONS,
     TEMPERATURE_COLORS,
@@ -38,8 +39,8 @@ import {
 import {
     useAgentQuery,
     useLatestMetricsQuery,
-    useLiveBuffer,
-    useMetricsQuery,
+    useTrendMetricsQuery,
+    useLiveMetricsQuery,
     useIsMobile,
     useNetworkInterfacesQuery,
 } from '../hooks';
@@ -57,6 +58,7 @@ import {
     TimeRangeSelector
 } from '../components/index';
 import {isAgentOnline} from '../domain/agents/agent-view-model';
+import {buildMetricChartData, getGpuSeries, getMonitorSeries, buildMonitorChartData, reconcileMonitorSelection, getTemperatureSeries} from '../domain/agents/server-chart-view-model';
 import PublicPageContainer from '../layouts/PublicPageContainer';
 
 /* ========================================== 共享工具 ========================================== */
@@ -70,19 +72,20 @@ interface ChartContainerProps {
     icon: LucideIcon;
     children: ReactNode;
     action?: ReactNode;
+    status?: ReactNode;
 }
 
-const ChartContainer = ({title, icon: Icon, children, action}: ChartContainerProps) => {
+const ChartContainer = ({title, icon: Icon, children, action, status}: ChartContainerProps) => {
     return (
         <section>
-            <div className="mb-3 flex items-center justify-between">
-                <h3 className="flex items-center gap-2 text-sm font-semibold text-content-secondary">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="flex shrink-0 items-center gap-2 text-sm font-semibold text-content-secondary">
           <span className="flex h-8 w-8 items-center justify-center rounded-control bg-brand-muted text-brand">
             <Icon className="h-4 w-4"/>
           </span>
                     {title}
                 </h3>
-                {action}
+                <div className="flex flex-wrap items-center justify-end gap-3">{status}{action}</div>
             </div>
             {children}
         </section>
@@ -94,6 +97,30 @@ const ChartQueryError = ({title, icon}: {title: string; icon: LucideIcon}) => (
         <ChartPlaceholder title="数据加载失败" subtitle="无法获取该指标，请稍后重试"/>
     </ChartContainer>
 );
+
+const TrendStatus = ({data, failed, isLive, now, intervalMs = 2000}: {data?: MetricsResponse; failed: boolean; isLive?: boolean; now?: number; intervalMs?: number}) => {
+    if (failed) return <span className="text-xs text-warning">刷新失败，保留上次数据</span>;
+    if (!isLive) return data?.failedSeries?.length ? <span className="text-xs text-warning">部分系列加载失败</span> : null;
+    const timestamp = data?.latestSampleAt;
+    const stale = !!timestamp && (now ?? Date.now()) - timestamp > Math.max(intervalMs * 3, 10000);
+    return <span className={cn('text-xs tabular-nums', failed || stale || data?.historyError ? 'text-warning' : 'text-content-muted')}>
+        {failed ? '刷新失败，保留上次数据' : data?.historyError ? data.historyError : timestamp ? `${stale ? '数据延迟 · ' : ''}最新采样 ${formatChartTime(timestamp, LIVE_RANGE)}` : '暂无采样'}
+    </span>;
+};
+
+const trendDomain = (isLive: boolean | undefined, now: number | undefined, data: MetricsResponse | undefined, windowMs = LIVE_WINDOW_MS): [number | string, number | string] => {
+    const end = now ?? data?.end ?? Date.now();
+    return isLive ? [end - windowMs, end] : ['dataMin', 'dataMax'];
+};
+
+const trendTicks = (isLive: boolean | undefined, now: number | undefined, data: MetricsResponse | undefined, windowMs = LIVE_WINDOW_MS): number[] | undefined => {
+    if (!isLive) return undefined;
+    const end = now ?? data?.end ?? Date.now();
+    const step = windowMs === LIVE_MONITOR_WINDOW_MS ? 180000 : 60000;
+    const ticks: number[] = [];
+    for (let tick = Math.ceil((end - windowMs) / step) * step; tick <= end; tick += step) ticks.push(tick);
+    return ticks;
+};
 
 /* ========================================== ServerHero ========================================== */
 
@@ -543,63 +570,43 @@ interface ChartPropsBase {
     start?: number;
     end?: number;
     isLive?: boolean;
-    latestMetrics?: LatestMetrics | null;
+    now?: number;
+    liveEnabled?: boolean;
 }
 
 interface CpuChartProps extends ChartPropsBase {
 }
 
-interface CpuPoint {
-    timestamp: number;
-    usage: number;
-}
-
-const CpuChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: CpuChartProps) => {
+const CpuChart = ({agentId, timeRange, start, end, isLive, now, liveEnabled}: CpuChartProps) => {
     const rangeMs = start !== undefined && end !== undefined ? end - start : undefined;
-    const effectiveRange = isLive ? LIVE_INITIAL_RANGE : timeRange;
     // 数据查询
-    const {data: metricsResponse, isLoading, isError} = useMetricsQuery({
+    const {data: metricsResponse, isLoading, isError} = useTrendMetricsQuery({
         agentId,
         type: 'cpu',
-        range: start !== undefined && end !== undefined ? undefined : effectiveRange,
+        timeRange,
+        liveEnabled,
         start,
         end,
     });
 
-    // 历史数据
-    const initialData = useMemo<CpuPoint[]>(() => {
-        const cpuSeries = metricsResponse?.series?.find(s => s.name === 'usage');
-        if (!cpuSeries) return [];
-        return cpuSeries.data.map((point) => ({
-            usage: Number(point.value.toFixed(2)),
-            timestamp: point.timestamp,
-        }));
-    }, [metricsResponse]);
-
-    // 实时点
-    const livePoint = useMemo<CpuPoint | null>(() => {
-        const timestamp = latestMetrics?.sampleTimestamps?.cpu;
-        if (!isLive || !latestMetrics?.cpu || !timestamp) return null;
-        const usage = latestMetrics.cpu.usagePercent;
-        if (typeof usage !== 'number' || !Number.isFinite(usage)) return null;
-        return {timestamp, usage: Number(usage.toFixed(2))};
-    }, [isLive, latestMetrics]);
-
-    const chartData = useLiveBuffer(initialData, !!isLive && !!latestMetrics?.sampleTimestamps, livePoint, LIVE_WINDOW_MS, agentId);
+    // 完整时序窗口
+    const chartData = useMemo(() => buildMetricChartData(
+        metricsResponse?.series ?? [], ['usage'], undefined, isLive ? 6000 : Infinity,
+    ), [metricsResponse, isLive]);
 
     // 渲染
     if (isLoading) {
         return (
-            <ChartContainer title="CPU 使用率" icon={Cpu}>
+            <ChartContainer title="CPU 使用率" icon={Cpu} status={<TrendStatus data={metricsResponse} failed={isError} isLive={isLive} now={now}/>}>
                 <ChartPlaceholder/>
             </ChartContainer>
         );
     }
 
-    if (isError) return <ChartQueryError title="CPU 使用率" icon={Cpu}/>;
+    if (isError && !metricsResponse) return <ChartQueryError title="CPU 使用率" icon={Cpu}/>;
 
     return (
-        <ChartContainer title="CPU 使用率" icon={Cpu}>
+        <ChartContainer title="CPU 使用率" icon={Cpu} status={<TrendStatus data={metricsResponse} failed={isError} isLive={isLive} now={now}/>}>
             {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={220}>
                     <AreaChart data={chartData}>
@@ -614,7 +621,8 @@ const CpuChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: CpuCh
                             dataKey="timestamp"
                             type="number"
                             scale="time"
-                            domain={['dataMin', 'dataMax']}
+                            domain={trendDomain(isLive, now, metricsResponse)} ticks={trendTicks(isLive, now, metricsResponse)}
+                            allowDataOverflow
                             tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
                             stroke="currentColor"
                             minTickGap={24}
@@ -629,14 +637,14 @@ const CpuChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: CpuCh
                         />
                         <Tooltip content={<CustomTooltip unit="%" timeFormat={isLive ? 'HH:mm:ss' : undefined}/>}/>
                         <Area
-                            type="monotone"
+                            type={isLive ? "linear" : "monotone"}
                             dataKey="usage"
                             name="CPU 使用率"
                             stroke="var(--theme-chart-1)"
                             strokeWidth={2}
                             fill="url(#cpuAreaGradient)"
                             activeDot={{r: 3}}
-                            connectNulls
+                            connectNulls={!isLive}
                             isAnimationActive={!isLive}
                         />
                     </AreaChart>
@@ -650,57 +658,36 @@ const CpuChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: CpuCh
 
 /* ========================================== MemoryChart ========================================== */
 
-interface MemoryPoint {
-    timestamp: number;
-    usage: number;
-}
-
-const MemoryChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: ChartPropsBase) => {
+const MemoryChart = ({agentId, timeRange, start, end, isLive, now, liveEnabled}: ChartPropsBase) => {
     const rangeMs = start !== undefined && end !== undefined ? end - start : undefined;
-    const effectiveRange = isLive ? LIVE_INITIAL_RANGE : timeRange;
     // 数据查询
-    const {data: metricsResponse, isLoading, isError} = useMetricsQuery({
+    const {data: metricsResponse, isLoading, isError} = useTrendMetricsQuery({
         agentId,
         type: 'memory',
-        range: start !== undefined && end !== undefined ? undefined : effectiveRange,
+        timeRange,
+        liveEnabled,
         start,
         end,
     });
 
-    // 历史数据
-    const initialData = useMemo<MemoryPoint[]>(() => {
-        const memorySeries = metricsResponse?.series?.find(s => s.name === 'usage');
-        if (!memorySeries) return [];
-        return memorySeries.data.map((point) => ({
-            usage: Number(point.value.toFixed(2)),
-            timestamp: point.timestamp,
-        }));
-    }, [metricsResponse]);
-
-    // 实时点
-    const livePoint = useMemo<MemoryPoint | null>(() => {
-        const timestamp = latestMetrics?.sampleTimestamps?.memory;
-        if (!isLive || !latestMetrics?.memory || !timestamp) return null;
-        const usage = latestMetrics.memory.usagePercent;
-        if (typeof usage !== 'number' || !Number.isFinite(usage)) return null;
-        return {timestamp, usage: Number(usage.toFixed(2))};
-    }, [isLive, latestMetrics]);
-
-    const chartData = useLiveBuffer(initialData, !!isLive && !!latestMetrics?.sampleTimestamps, livePoint, LIVE_WINDOW_MS, agentId);
+    // 完整时序窗口
+    const chartData = useMemo(() => buildMetricChartData(
+        metricsResponse?.series ?? [], ['usage'], undefined, isLive ? 15000 : Infinity,
+    ), [metricsResponse, isLive]);
 
     // 渲染
     if (isLoading) {
         return (
-            <ChartContainer title="内存使用率" icon={MemoryStick}>
+            <ChartContainer title="内存使用率" icon={MemoryStick} status={<TrendStatus data={metricsResponse} failed={isError} isLive={isLive} now={now} intervalMs={METRIC_INTERVALS.memory}/>}>
                 <ChartPlaceholder/>
             </ChartContainer>
         );
     }
 
-    if (isError) return <ChartQueryError title="内存使用率" icon={MemoryStick}/>;
+    if (isError && !metricsResponse) return <ChartQueryError title="内存使用率" icon={MemoryStick}/>;
 
     return (
-        <ChartContainer title="内存使用率" icon={MemoryStick}>
+        <ChartContainer title="内存使用率" icon={MemoryStick} status={<TrendStatus data={metricsResponse} failed={isError} isLive={isLive} now={now} intervalMs={METRIC_INTERVALS.memory}/>}>
             {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={220}>
                     <AreaChart data={chartData}>
@@ -715,7 +702,8 @@ const MemoryChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
                             dataKey="timestamp"
                             type="number"
                             scale="time"
-                            domain={['dataMin', 'dataMax']}
+                            domain={trendDomain(isLive, now, metricsResponse)} ticks={trendTicks(isLive, now, metricsResponse)}
+                            allowDataOverflow
                             tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
                             stroke="currentColor"
                             minTickGap={24}
@@ -730,14 +718,14 @@ const MemoryChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
                         />
                         <Tooltip content={<CustomTooltip unit="%" timeFormat={isLive ? 'HH:mm:ss' : undefined}/>}/>
                         <Area
-                            type="monotone"
+                            type={isLive ? "linear" : "monotone"}
                             dataKey="usage"
                             name="内存使用率"
                             stroke="var(--theme-chart-2)"
                             strokeWidth={2}
                             fill="url(#memoryAreaGradient)"
                             activeDot={{r: 3}}
-                            connectNulls
+                            connectNulls={!isLive}
                             isAnimationActive={!isLive}
                         />
                     </AreaChart>
@@ -751,85 +739,36 @@ const MemoryChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
 
 /* ========================================== DiskIOChart ========================================== */
 
-interface DiskIOPoint {
-    timestamp: number;
-    read: number;
-    write: number;
-}
-
-const DiskIOChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: ChartPropsBase) => {
+const DiskIOChart = ({agentId, timeRange, start, end, isLive, now, liveEnabled}: ChartPropsBase) => {
     const rangeMs = start !== undefined && end !== undefined ? end - start : undefined;
-    const effectiveRange = isLive ? LIVE_INITIAL_RANGE : timeRange;
     // 数据查询
-    const {data: metricsResponse, isLoading, isError} = useMetricsQuery({
+    const {data: metricsResponse, isLoading, isError} = useTrendMetricsQuery({
         agentId,
         type: 'disk_io',
-        range: start !== undefined && end !== undefined ? undefined : effectiveRange,
+        timeRange,
+        liveEnabled,
         start,
         end,
     });
 
-    // 历史数据
-    const initialData = useMemo<DiskIOPoint[]>(() => {
-        if (!metricsResponse?.series || metricsResponse.series.length === 0) return [];
-
-        const readSeries = metricsResponse.series.find(s => s.name === 'read');
-        const writeSeries = metricsResponse.series.find(s => s.name === 'write');
-
-        if (!readSeries || !writeSeries) return [];
-
-        const timeMap = new Map<number, DiskIOPoint>();
-
-        readSeries.data.forEach(point => {
-            timeMap.set(point.timestamp, {
-                timestamp: point.timestamp,
-                read: toMB(point.value),
-                write: 0,
-            });
-        });
-
-        writeSeries.data.forEach(point => {
-            const existing = timeMap.get(point.timestamp);
-            if (existing) {
-                existing.write = toMB(point.value);
-            } else {
-                timeMap.set(point.timestamp, {
-                    timestamp: point.timestamp,
-                    read: 0,
-                    write: toMB(point.value),
-                });
-            }
-        });
-
-        return Array.from(timeMap.values()).sort((a, b) => a.timestamp - b.timestamp);
-    }, [metricsResponse]);
-
-    // 使用对应指标的采集时间
-    const livePoint = useMemo<DiskIOPoint | null>(() => {
-        const timestamp = latestMetrics?.sampleTimestamps?.disk_io;
-        if (!isLive || !latestMetrics?.diskIO || !timestamp) return null;
-        return {
-            timestamp,
-            read: toMB(latestMetrics.diskIO.totalReadBytesRate),
-            write: toMB(latestMetrics.diskIO.totalWriteBytesRate),
-        };
-    }, [isLive, latestMetrics]);
-
-    const chartData = useLiveBuffer(initialData, !!isLive && !!latestMetrics?.sampleTimestamps, livePoint, LIVE_WINDOW_MS, agentId);
+    // 完整时序窗口
+    const chartData = useMemo(() => buildMetricChartData(
+        metricsResponse?.series ?? [], ['read', 'write'], toMB, isLive ? 6000 : Infinity,
+    ), [metricsResponse, isLive]);
 
     // 渲染
     if (isLoading) {
         return (
-            <ChartContainer title="磁盘 I/O (MB/s)" icon={HardDrive}>
+            <ChartContainer title="磁盘 I/O (MB/s)" icon={HardDrive} status={<TrendStatus data={metricsResponse} failed={isError} isLive={isLive} now={now}/>}>
                 <ChartPlaceholder/>
             </ChartContainer>
         );
     }
 
-    if (isError) return <ChartQueryError title="磁盘 I/O (MB/s)" icon={HardDrive}/>;
+    if (isError && !metricsResponse) return <ChartQueryError title="磁盘 I/O (MB/s)" icon={HardDrive}/>;
 
     return (
-        <ChartContainer title="磁盘 I/O (MB/s)" icon={HardDrive}>
+        <ChartContainer title="磁盘 I/O (MB/s)" icon={HardDrive} status={<TrendStatus data={metricsResponse} failed={isError} isLive={isLive} now={now}/>}>
             {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={250}>
                     <AreaChart data={chartData}>
@@ -848,7 +787,8 @@ const DiskIOChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
                             dataKey="timestamp"
                             type="number"
                             scale="time"
-                            domain={['dataMin', 'dataMax']}
+                            domain={trendDomain(isLive, now, metricsResponse)} ticks={trendTicks(isLive, now, metricsResponse)}
+                            allowDataOverflow
                             tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
                             stroke="currentColor"
                             minTickGap={24}
@@ -865,25 +805,25 @@ const DiskIOChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
                         <Tooltip content={<CustomTooltip unit=" MB" timeFormat={isLive ? 'HH:mm:ss' : undefined}/>}/>
                         <Legend/>
                         <Area
-                            type="monotone"
+                            type={isLive ? "linear" : "monotone"}
                             dataKey="read"
                             name="读取"
                             stroke="var(--theme-chart-1)"
                             strokeWidth={2}
                             fill="url(#colorDiskRead)"
                             activeDot={{r: 3}}
-                            connectNulls
+                            connectNulls={!isLive}
                             isAnimationActive={!isLive}
                         />
                         <Area
-                            type="monotone"
+                            type={isLive ? "linear" : "monotone"}
                             dataKey="write"
                             name="写入"
                             stroke="var(--theme-chart-2)"
                             strokeWidth={2}
                             fill="url(#colorDiskWrite)"
                             activeDot={{r: 3}}
-                            connectNulls
+                            connectNulls={!isLive}
                             isAnimationActive={!isLive}
                         />
                     </AreaChart>
@@ -897,101 +837,41 @@ const DiskIOChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: Ch
 
 /* ========================================== NetworkChart ========================================== */
 
-interface NetworkPoint {
-    timestamp: number;
-    upload: number;
-    download: number;
-}
-
-const NetworkChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: ChartPropsBase) => {
+const NetworkChart = ({agentId, timeRange, start, end, isLive, now, liveEnabled}: ChartPropsBase) => {
     const [selectedInterface, setSelectedInterface] = useState<string>('all');
     const rangeMs = start !== undefined && end !== undefined ? end - start : undefined;
-    const effectiveRange = isLive ? LIVE_INITIAL_RANGE : timeRange;
 
     // 查询网卡列表
-    const {data: interfacesData} = useNetworkInterfacesQuery(agentId);
-    const availableInterfaces = interfacesData?.interfaces || [];
+    const {data: interfacesData} = useNetworkInterfacesQuery(agentId, !isLive);
+    const liveBatch = useLiveMetricsQuery(agentId, !!isLive, liveEnabled);
+    const availableInterfaces = useMemo(() => isLive
+        ? [...new Set((liveBatch.data?.series.network ?? []).map(series => series.labels?.interface).filter((name): name is string => !!name))].sort()
+        : interfacesData?.interfaces ?? [], [isLive, liveBatch.data, interfacesData]);
 
     // 当网卡列表变化时，验证选中的网卡
     useEffect(() => {
-        if (selectedInterface !== 'all' && availableInterfaces.length > 0) {
+        if (selectedInterface !== 'all' && (isLive ? liveBatch.data : interfacesData)) {
             if (!availableInterfaces.includes(selectedInterface)) {
                 setSelectedInterface('all');
             }
         }
-    }, [availableInterfaces, selectedInterface]);
+    }, [availableInterfaces, selectedInterface, isLive, liveBatch.data, interfacesData]);
 
     // 查询网络数据
-    const {data: metricsResponse, isLoading, isError} = useMetricsQuery({
+    const {data: metricsResponse, isLoading, isError} = useTrendMetricsQuery({
         agentId,
         type: 'network',
-        range: start !== undefined && end !== undefined ? undefined : effectiveRange,
+        timeRange,
+        liveEnabled,
         start,
         end,
         interfaceName: selectedInterface !== 'all' ? selectedInterface : undefined,
     });
 
-    // 历史数据
-    const initialData = useMemo<NetworkPoint[]>(() => {
-        if (!metricsResponse?.series || metricsResponse.series.length === 0) return [];
-
-        const uploadSeries = metricsResponse.series.find(s => s.name === 'upload');
-        const downloadSeries = metricsResponse.series.find(s => s.name === 'download');
-
-        if (!uploadSeries || !downloadSeries) return [];
-
-        const timeMap = new Map<number, NetworkPoint>();
-
-        uploadSeries.data.forEach(point => {
-            timeMap.set(point.timestamp, {
-                timestamp: point.timestamp,
-                upload: toMB(point.value),
-                download: 0,
-            });
-        });
-
-        downloadSeries.data.forEach(point => {
-            const existing = timeMap.get(point.timestamp);
-            if (existing) {
-                existing.download = toMB(point.value);
-            } else {
-                timeMap.set(point.timestamp, {
-                    timestamp: point.timestamp,
-                    upload: 0,
-                    download: toMB(point.value),
-                });
-            }
-        });
-
-        return Array.from(timeMap.values()).sort((a, b) => a.timestamp - b.timestamp);
-    }, [metricsResponse]);
-
-    // 使用对应指标的采集时间
-    const livePoint = useMemo<NetworkPoint | null>(() => {
-        const timestamp = latestMetrics?.sampleTimestamps?.network;
-        if (!isLive || !timestamp) return null;
-
-        let sentRate = 0;
-        let recvRate = 0;
-        if (selectedInterface === 'all') {
-            const summary = latestMetrics.network;
-            if (!summary) return null;
-            sentRate = summary.totalBytesSentRate;
-            recvRate = summary.totalBytesRecvRate;
-        } else {
-            const iface = latestMetrics.networkInterfaces?.find(i => i.interface === selectedInterface);
-            if (!iface) return null;
-            sentRate = iface.bytesSentRate;
-            recvRate = iface.bytesRecvRate;
-        }
-        return {
-            timestamp,
-            upload: toMB(sentRate),
-            download: toMB(recvRate),
-        };
-    }, [isLive, latestMetrics, selectedInterface]);
-
-    const chartData = useLiveBuffer(initialData, !!isLive && !!latestMetrics?.sampleTimestamps, livePoint, LIVE_WINDOW_MS, `${agentId}|${selectedInterface}`);
+    // 完整时序窗口
+    const chartData = useMemo(() => buildMetricChartData(
+        metricsResponse?.series ?? [], ['upload', 'download'], toMB, isLive ? 6000 : Infinity,
+    ), [metricsResponse, isLive]);
 
     // 网卡选择器
     const interfaceSelector = availableInterfaces.length > 0 && (
@@ -1001,6 +881,7 @@ const NetworkChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: C
             onChange={(e) => setSelectedInterface(e.target.value)}
             className="rounded-control border border-line bg-panel-muted px-3 py-1.5 text-sm text-content-secondary hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
         >
+            <option value="all">全部网卡</option>
             {availableInterfaces.map((iface) => (
                 <option key={iface} value={iface}>
                     {iface}
@@ -1012,16 +893,16 @@ const NetworkChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: C
     // 渲染
     if (isLoading) {
         return (
-            <ChartContainer title="网络流量（MB/s）" icon={Network} action={interfaceSelector}>
+            <ChartContainer title="网络流量（MB/s）" icon={Network} status={<TrendStatus data={metricsResponse} failed={isError} isLive={isLive} now={now}/>} action={interfaceSelector}>
                 <ChartPlaceholder/>
             </ChartContainer>
         );
     }
 
-    if (isError) return <ChartQueryError title="网络流量 (MB/s)" icon={Network}/>;
+    if (isError && !metricsResponse) return <ChartQueryError title="网络流量 (MB/s)" icon={Network}/>;
 
     return (
-        <ChartContainer title="网络流量（MB/s）" icon={Network} action={interfaceSelector}>
+        <ChartContainer title="网络流量（MB/s）" icon={Network} status={<TrendStatus data={metricsResponse} failed={isError} isLive={isLive} now={now}/>} action={interfaceSelector}>
             {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={250}>
                     <AreaChart data={chartData}>
@@ -1040,7 +921,8 @@ const NetworkChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: C
                             dataKey="timestamp"
                             type="number"
                             scale="time"
-                            domain={['dataMin', 'dataMax']}
+                            domain={trendDomain(isLive, now, metricsResponse)} ticks={trendTicks(isLive, now, metricsResponse)}
+                            allowDataOverflow
                             tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
                             stroke="currentColor"
                             minTickGap={24}
@@ -1057,25 +939,25 @@ const NetworkChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: C
                         <Tooltip content={<CustomTooltip unit=" MB/s" timeFormat={isLive ? 'HH:mm:ss' : undefined}/>}/>
                         <Legend/>
                         <Area
-                            type="monotone"
+                            type={isLive ? "linear" : "monotone"}
                             dataKey="upload"
                             name="上行"
                             stroke={INTERFACE_COLORS[0].upload}
                             strokeWidth={2}
                             fill="url(#color-upload)"
                             activeDot={{r: 3}}
-                            connectNulls
+                            connectNulls={!isLive}
                             isAnimationActive={!isLive}
                         />
                         <Area
-                            type="monotone"
+                            type={isLive ? "linear" : "monotone"}
                             dataKey="download"
                             name="下行"
                             stroke={INTERFACE_COLORS[0].download}
                             strokeWidth={2}
                             fill="url(#color-download)"
                             activeDot={{r: 3}}
-                            connectNulls
+                            connectNulls={!isLive}
                             isAnimationActive={!isLive}
                         />
                     </AreaChart>
@@ -1089,82 +971,36 @@ const NetworkChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: C
 
 /* ========================================== NetworkConnectionChart ========================================== */
 
-interface ConnPoint {
-    timestamp: number;
-    established: number;
-    time_wait: number;
-    close_wait: number;
-    listen: number;
-}
-
-const NetworkConnectionChart = ({agentId, timeRange, start, end, isLive, latestMetrics}: ChartPropsBase) => {
+const NetworkConnectionChart = ({agentId, timeRange, start, end, isLive, now, liveEnabled}: ChartPropsBase) => {
     const rangeMs = start !== undefined && end !== undefined ? end - start : undefined;
-    const effectiveRange = isLive ? LIVE_INITIAL_RANGE : timeRange;
-    const {data: metricsResponse, isLoading, isError} = useMetricsQuery({
+    const {data: metricsResponse, isLoading, isError} = useTrendMetricsQuery({
         agentId,
         type: 'network_connection',
-        range: start !== undefined && end !== undefined ? undefined : effectiveRange,
+        timeRange,
+        liveEnabled,
         start,
         end,
     });
 
-    // 历史数据
-    const initialData = useMemo<ConnPoint[]>(() => {
-        if (!metricsResponse?.series || metricsResponse.series.length === 0) return [];
-
-        const timeMap = new Map<number, ConnPoint>();
-
-        metricsResponse.series.forEach(series => {
-            const stateName = series.name;
-            series.data.forEach(point => {
-                if (!timeMap.has(point.timestamp)) {
-                    timeMap.set(point.timestamp, {
-                        timestamp: point.timestamp,
-                        established: 0,
-                        time_wait: 0,
-                        close_wait: 0,
-                        listen: 0,
-                    });
-                }
-                const existing = timeMap.get(point.timestamp)!;
-                if (stateName === 'established' || stateName === 'time_wait' || stateName === 'close_wait' || stateName === 'listen') {
-                    existing[stateName] = Number(point.value.toFixed(0));
-                }
-            });
-        });
-
-        return Array.from(timeMap.values()).sort((a, b) => a.timestamp - b.timestamp);
-    }, [metricsResponse]);
-
-    // 实时点
-    const livePoint = useMemo<ConnPoint | null>(() => {
-        const timestamp = latestMetrics?.sampleTimestamps?.network_connection;
-        if (!isLive || !latestMetrics?.networkConnection || !timestamp) return null;
-        const c = latestMetrics.networkConnection;
-        return {
-            timestamp,
-            established: c.established ?? 0,
-            time_wait: c.timeWait ?? 0,
-            close_wait: c.closeWait ?? 0,
-            listen: c.listen ?? 0,
-        };
-    }, [isLive, latestMetrics]);
-
-    const chartData = useLiveBuffer(initialData, !!isLive && !!latestMetrics?.sampleTimestamps, livePoint, LIVE_WINDOW_MS, agentId);
+    // 完整时序窗口
+    const chartData = useMemo(() => buildMetricChartData(
+        metricsResponse?.series ?? [], ['established', 'time_wait', 'close_wait', 'listen'],
+        value => Number(value.toFixed(0)), isLive ? 30000 : Infinity,
+    ), [metricsResponse, isLive]);
 
     // 渲染
     if (isLoading) {
         return (
-            <ChartContainer title="网络连接统计" icon={Network}>
+            <ChartContainer title="网络连接统计" icon={Network} status={<TrendStatus data={metricsResponse} failed={isError} isLive={isLive} now={now} intervalMs={METRIC_INTERVALS.network_connection}/>}>
                 <ChartPlaceholder/>
             </ChartContainer>
         );
     }
 
-    if (isError) return <ChartQueryError title="网络连接统计" icon={Network}/>;
+    if (isError && !metricsResponse) return <ChartQueryError title="网络连接统计" icon={Network}/>;
 
     return (
-        <ChartContainer title="网络连接统计" icon={Network}>
+        <ChartContainer title="网络连接统计" icon={Network} status={<TrendStatus data={metricsResponse} failed={isError} isLive={isLive} now={now} intervalMs={METRIC_INTERVALS.network_connection}/>}>
             {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={250}>
                     <LineChart data={chartData}>
@@ -1173,7 +1009,8 @@ const NetworkConnectionChart = ({agentId, timeRange, start, end, isLive, latestM
                             dataKey="timestamp"
                             type="number"
                             scale="time"
-                            domain={['dataMin', 'dataMax']}
+                            domain={trendDomain(isLive, now, metricsResponse)} ticks={trendTicks(isLive, now, metricsResponse)}
+                            allowDataOverflow
                             tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
                             stroke="currentColor"
                             minTickGap={24}
@@ -1188,47 +1025,47 @@ const NetworkConnectionChart = ({agentId, timeRange, start, end, isLive, latestM
                         <Tooltip content={<CustomTooltip unit="" timeFormat={isLive ? 'HH:mm:ss' : undefined}/>}/>
                         <Legend/>
                         <Line
-                            type="monotone"
+                            type={isLive ? "linear" : "monotone"}
                             dataKey="established"
                             name="ESTABLISHED"
                             stroke="var(--theme-chart-2)"
                             strokeWidth={2}
                             dot={false}
                             activeDot={{r: 3}}
-                            connectNulls
+                            connectNulls={!isLive}
                             isAnimationActive={!isLive}
                         />
                         <Line
-                            type="monotone"
+                            type={isLive ? "linear" : "monotone"}
                             dataKey="time_wait"
                             name="TIME_WAIT"
                             stroke="var(--theme-warning)"
                             strokeWidth={2}
                             dot={false}
                             activeDot={{r: 3}}
-                            connectNulls
+                            connectNulls={!isLive}
                             isAnimationActive={!isLive}
                         />
                         <Line
-                            type="monotone"
+                            type={isLive ? "linear" : "monotone"}
                             dataKey="close_wait"
                             name="CLOSE_WAIT"
                             stroke="var(--theme-danger)"
                             strokeWidth={2}
                             dot={false}
                             activeDot={{r: 3}}
-                            connectNulls
+                            connectNulls={!isLive}
                             isAnimationActive={!isLive}
                         />
                         <Line
-                            type="monotone"
+                            type={isLive ? "linear" : "monotone"}
                             dataKey="listen"
                             name="LISTEN"
                             stroke="var(--theme-chart-1)"
                             strokeWidth={2}
                             dot={false}
                             activeDot={{r: 3}}
-                            connectNulls
+                            connectNulls={!isLive}
                             isAnimationActive={!isLive}
                         />
                     </LineChart>
@@ -1242,716 +1079,95 @@ const NetworkConnectionChart = ({agentId, timeRange, start, end, isLive, latestM
 
 /* ========================================== GpuChart ========================================== */
 
-const GpuChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBase) => {
-    const rangeMs = start !== undefined && end !== undefined ? end - start : undefined;
-    const effectiveRange = isLive ? LIVE_INITIAL_RANGE : timeRange;
-    // 数据查询
-    const {data: metricsResponse, isLoading, isError} = useMetricsQuery({
-        agentId,
-        type: 'gpu',
-        range: start !== undefined && end !== undefined ? undefined : effectiveRange,
-        start,
-        end,
-        refetchIntervalMs: isLive ? POLLING_INTERVALS.liveHistory : undefined,
-    });
-
-    // 数据转换
-    const chartData = useMemo(() => {
-        if (!metricsResponse?.series || metricsResponse.series.length === 0) return [];
-
-        const timeMap = new Map<number, { timestamp: number; utilization?: number; temperature?: number }>();
-
-        const utilizationSeries = metricsResponse.series.find(s => s.name === 'utilization');
-        const temperatureSeries = metricsResponse.series.find(s => s.name === 'temperature');
-
-        utilizationSeries?.data.forEach(point => {
-            const existing = timeMap.get(point.timestamp);
-            if (existing) {
-                existing.utilization = Number(point.value.toFixed(2));
-            } else {
-                timeMap.set(point.timestamp, {
-                    timestamp: point.timestamp,
-                    utilization: Number(point.value.toFixed(2)),
-                });
-            }
-        });
-
-        temperatureSeries?.data.forEach(point => {
-            const existing = timeMap.get(point.timestamp);
-            if (existing) {
-                existing.temperature = Number(point.value.toFixed(2));
-            } else {
-                timeMap.set(point.timestamp, {
-                    timestamp: point.timestamp,
-                    temperature: Number(point.value.toFixed(2)),
-                });
-            }
-        });
-
-        return Array.from(timeMap.values()).sort((a, b) => a.timestamp - b.timestamp);
-    }, [metricsResponse]);
-
-    // 渲染
-    if (isLoading) {
-        return (
-            <ChartContainer title="GPU 使用率与温度" icon={Zap}>
-                <ChartPlaceholder/>
-            </ChartContainer>
-        );
-    }
-
-    if (isError) return <ChartQueryError title="GPU 使用率与温度" icon={Zap}/>;
-
-    // 如果没有 GPU 数据，不渲染组件
-    if (chartData.length === 0) {
-        return null;
-    }
-
-    return (
-        <ChartContainer title="GPU 使用率与温度" icon={Zap}>
-            <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={chartData}>
-                    <CartesianGrid stroke="currentColor" strokeDasharray="4 4" className="stroke-line"/>
-                    <XAxis
-                        dataKey="timestamp"
-                        type="number"
-                        scale="time"
-                        domain={['dataMin', 'dataMax']}
-                        tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
-                        stroke="currentColor"
-                        className="stroke-content-muted"
-                        style={{fontSize: '13px'}}
-                    />
-                    <YAxis
-                        yAxisId="left"
-                        stroke="currentColor"
-                        className="stroke-content-muted"
-                        style={{fontSize: '13px'}}
-                        tickFormatter={(value) => `${value}%`}
-                    />
-                    <YAxis
-                        yAxisId="right"
-                        orientation="right"
-                        stroke="currentColor"
-                        className="stroke-content-muted"
-                        style={{fontSize: '13px'}}
-                        tickFormatter={(value) => `${value}°C`}
-                    />
-                    <Tooltip content={<CustomTooltip unit=""/>}/>
-                    <Legend/>
-                    <Line
-                        yAxisId="left"
-                        type="monotone"
-                        dataKey="utilization"
-                        name="使用率 (%)"
-                        stroke="var(--theme-chart-4)"
-                        strokeWidth={2}
-                        dot={false}
-                        activeDot={{r: 3}}
-                        connectNulls
-                        isAnimationActive={!isLive}
-                    />
-                    <Line
-                        yAxisId="right"
-                        type="monotone"
-                        dataKey="temperature"
-                        name="温度 (°C)"
-                        stroke="var(--theme-chart-3)"
-                        strokeWidth={2}
-                        dot={false}
-                        activeDot={{r: 3}}
-                        connectNulls
-                        isAnimationActive={!isLive}
-                    />
-                </LineChart>
-            </ResponsiveContainer>
-        </ChartContainer>
-    );
+const GpuChartImpl = ({agentId, timeRange, start, end, isLive, now, liveEnabled}: ChartPropsBase) => {
+    const {data: metricsResponse, isLoading, isError} = useTrendMetricsQuery({agentId, type: 'gpu', timeRange, start, end, liveEnabled});
+    const curves = useMemo(() => getGpuSeries(metricsResponse?.series ?? []), [metricsResponse]);
+    const chartData = useMemo(() => buildMonitorChartData(curves, new Set(curves.map(curve => curve.key)), isLive ? METRIC_INTERVALS.gpu * 3 : Infinity), [curves, isLive]);
+    if (isLoading) return <ChartContainer title="GPU 使用率与温度" icon={Zap}><ChartPlaceholder/></ChartContainer>;
+    if (isError && !metricsResponse) return <ChartQueryError title="GPU 使用率与温度" icon={Zap}/>;
+    if (!curves.length) return null;
+    return <ChartContainer title="GPU 使用率与温度" icon={Zap} status={<TrendStatus data={metricsResponse} failed={isError} isLive={isLive} now={now} intervalMs={METRIC_INTERVALS.gpu}/>}>
+        <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="4 4" className="stroke-line"/>
+                <XAxis stroke="currentColor" dataKey="timestamp" type="number" scale="time" domain={trendDomain(isLive, now, metricsResponse)} ticks={trendTicks(isLive, now, metricsResponse)} allowDataOverflow tickFormatter={value => formatChartTime(Number(value), timeRange, start !== undefined && end !== undefined ? end-start : undefined)} minTickGap={24} className="text-xs text-content-secondary"/>
+                <YAxis stroke="currentColor" yAxisId="utilization" domain={[0,100]} tickFormatter={value => `${value}%`} className="text-xs text-content-secondary"/>
+                <YAxis stroke="currentColor" yAxisId="temperature" orientation="right" tickFormatter={value => `${value}°C`} className="text-xs text-content-secondary"/>
+                <Tooltip content={<CustomTooltip unit="" timeFormat={isLive ? 'HH:mm:ss' : undefined}/>}/>
+                <Legend/>
+                {curves.map((curve, index) => <Line key={curve.key} yAxisId={curve.metricType} dataKey={curve.key} name={curve.name} type="linear" stroke={INTERFACE_COLORS[index % INTERFACE_COLORS.length].download} dot={curve.points.length === 1} activeDot={{r:3}} connectNulls={false} isAnimationActive={!isLive}/>)}
+            </LineChart>
+        </ResponsiveContainer>
+    </ChartContainer>;
 };
-
 const GpuChart = memo(GpuChartImpl);
 
-/* ========================================== TemperatureChart ========================================== */
-
-const TemperatureChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBase) => {
-    const [selectedTempType, setSelectedTempType] = useState<string>('all');
-    const rangeMs = start !== undefined && end !== undefined ? end - start : undefined;
-    const effectiveRange = isLive ? LIVE_INITIAL_RANGE : timeRange;
-
-    // 数据查询：自动刷新模式按配置的间隔重查
-    const {data: metricsResponse, isLoading, isError} = useMetricsQuery({
-        agentId,
-        type: 'temperature',
-        range: start !== undefined && end !== undefined ? undefined : effectiveRange,
-        start,
-        end,
-        refetchIntervalMs: isLive ? POLLING_INTERVALS.liveHistory : undefined,
-    });
-
-    // 数据转换
-    const chartData = useMemo(() => {
-        if (!metricsResponse?.series || metricsResponse.series.length === 0) return [];
-
-        const timeMap = new Map<number, any>();
-
-        metricsResponse.series.forEach(series => {
-            const sensorName = series.name;
-            series.data.forEach(point => {
-                if (!timeMap.has(point.timestamp)) {
-                    timeMap.set(point.timestamp, {timestamp: point.timestamp});
-                }
-
-                const existing = timeMap.get(point.timestamp)!;
-                existing[sensorName] = Number(point.value.toFixed(2));
-            });
-        });
-
-        return Array.from(timeMap.values());
-    }, [metricsResponse]);
-
-    // 提取所有唯一的温度类型
-    const temperatureTypes = useMemo(() => {
-        return metricsResponse?.series?.map(s => s.name).sort() || [];
-    }, [metricsResponse]);
-
-    // 根据选中的类型过滤温度数据
-    const filteredTemperatureTypes = useMemo(() => {
-        if (selectedTempType === 'all') {
-            return temperatureTypes;
-        }
-        return temperatureTypes.filter(type => type === selectedTempType);
-    }, [temperatureTypes, selectedTempType]);
-
-    // 当温度类型列表变化时，如果当前选中的类型不在列表中，重置为 'all'
-    useEffect(() => {
-        if (selectedTempType !== 'all' && temperatureTypes.length > 0) {
-            if (!temperatureTypes.includes(selectedTempType)) {
-                setSelectedTempType('all');
-            }
-        }
-    }, [temperatureTypes, selectedTempType]);
-
-    // 温度类型选择器
-    const tempTypeSelector = temperatureTypes.length > 1 && (
-        <select
-            aria-label="温度传感器类型"
-            value={selectedTempType}
-            onChange={(e) => setSelectedTempType(e.target.value)}
-            className="rounded-control border border-line bg-panel-muted px-3 py-1.5 text-sm text-content-secondary hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-        >
-            <option value="all">所有类型</option>
-            {temperatureTypes.map((type) => (
-                <option key={type} value={type}>
-                    {type}
-                </option>
-            ))}
+const TemperatureChartImpl = ({agentId, timeRange, start, end, isLive, now, liveEnabled}: ChartPropsBase) => {
+    const [selectedSensor, setSelectedSensor] = useState('all');
+    const {data: metricsResponse, isLoading, isError} = useTrendMetricsQuery({agentId, type:'temperature', timeRange, start, end, liveEnabled});
+    const curves = useMemo(() => getTemperatureSeries(metricsResponse?.series ?? []), [metricsResponse]);
+    const visible = useMemo(() => curves.filter(curve => selectedSensor === 'all' || curve.key === selectedSensor), [curves, selectedSensor]);
+    const chartData = useMemo(() => buildMonitorChartData(visible, new Set(visible.map(curve => curve.key)), Infinity, !!isLive), [visible, isLive]);
+    useEffect(() => { if (curves.length && selectedSensor !== 'all' && !curves.some(curve => curve.key === selectedSensor)) setSelectedSensor('all'); }, [curves, selectedSensor]);
+    if (isLoading) return <ChartContainer title="系统温度" icon={Thermometer}><ChartPlaceholder/></ChartContainer>;
+    if (isError && !metricsResponse) return <ChartQueryError title="系统温度" icon={Thermometer}/>;
+    if (!curves.length) return null;
+    return <ChartContainer title="系统温度" icon={Thermometer} status={<TrendStatus data={metricsResponse} failed={isError} isLive={isLive} now={now} intervalMs={METRIC_INTERVALS.temperature}/>} action={
+        <select aria-label="温度指标" value={selectedSensor} onChange={event => setSelectedSensor(event.target.value)} className="rounded-control border border-line bg-panel px-3 py-1.5 text-xs text-content-secondary">
+            <option value="all">全部温度</option>{curves.map(curve => <option key={curve.key} value={curve.key}>{curve.name}</option>)}
         </select>
-    );
-
-    // 渲染
-    if (isLoading) {
-        return (
-            <ChartContainer title="系统温度" icon={Thermometer} action={tempTypeSelector}>
-                <ChartPlaceholder/>
-            </ChartContainer>
-        );
-    }
-
-    if (isError) return <ChartQueryError title="系统温度" icon={Thermometer}/>;
-
-    // 如果没有温度数据，不渲染组件
-    if (chartData.length === 0 || temperatureTypes.length === 0) {
-        return null;
-    }
-
-    return (
-        <ChartContainer title="系统温度" icon={Thermometer} action={tempTypeSelector}>
-            <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={chartData}>
-                    <CartesianGrid stroke="currentColor" strokeDasharray="4 4" className="stroke-line"/>
-                    <XAxis
-                        dataKey="timestamp"
-                        type="number"
-                        scale="time"
-                        domain={['dataMin', 'dataMax']}
-                        tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
-                        stroke="currentColor"
-                        minTickGap={24}
-                        textAnchor="middle"
-                        className="text-xs text-content-secondary tabular-nums"
-                        height={45}
-                    />
-                    <YAxis
-                        stroke="currentColor"
-                        className="stroke-content-muted text-xs"
-                        tickFormatter={(value) => `${value}°C`}
-                    />
-                    <Tooltip content={<CustomTooltip unit="°C"/>}/>
-                    <Legend/>
-                    {/* 为选中的温度类型渲染线条 */}
-                    {filteredTemperatureTypes.map((type, index) => {
-                        const color = TEMPERATURE_COLORS[type] || `hsl(${(index * 60) % 360}, 70%, 50%)`;
-                        return (
-                            <Line
-                                key={type}
-                                type="monotone"
-                                dataKey={type}
-                                name={type}
-                                stroke={color}
-                                strokeWidth={2}
-                                dot={false}
-                                activeDot={{r: 3}}
-                                connectNulls
-                                isAnimationActive={!isLive}
-                            />
-                        );
-                    })}
-                </LineChart>
-            </ResponsiveContainer>
-        </ChartContainer>
-    );
+    }>
+        <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="4 4" className="stroke-line"/>
+                <XAxis stroke="currentColor" dataKey="timestamp" type="number" scale="time" domain={trendDomain(isLive, now, metricsResponse)} ticks={trendTicks(isLive, now, metricsResponse)} allowDataOverflow tickFormatter={value => formatChartTime(Number(value), timeRange, start !== undefined && end !== undefined ? end-start : undefined)} minTickGap={24} className="text-xs text-content-secondary"/>
+                <YAxis stroke="currentColor" tickFormatter={value => `${value}°C`} className="text-xs text-content-secondary"/>
+                <Tooltip content={<CustomTooltip unit="°C" timeFormat={isLive ? 'HH:mm:ss' : undefined}/>}/><Legend/>
+                {visible.map((curve,index) => <Line key={curve.key} dataKey={curve.key} name={curve.name} type="linear" stroke={TEMPERATURE_COLORS[curve.name] ?? INTERFACE_COLORS[index % INTERFACE_COLORS.length].download} dot={curve.points.length === 1} activeDot={{r:3}} connectNulls={false} isAnimationActive={!isLive}/>)}
+            </LineChart>
+        </ResponsiveContainer>
+    </ChartContainer>;
 };
-
 const TemperatureChart = memo(TemperatureChartImpl);
 
-/* ========================================== MonitorChart ========================================== */
-
-/**
- * 降采样算法 - 使用LTTB (Largest Triangle Three Buckets)
- * 确保输出精确的maxPoints个点，保留关键特征
- */
-const downsampleData = (data: any[], maxPoints: number): any[] => {
-    // 边界检查
-    if (!data || data.length === 0) return [];
-    if (maxPoints < 2) maxPoints = 2;
-    if (data.length <= maxPoints) return [...data];
-
-    const result: any[] = [data[0]]; // 保留第一个点
-
-    // 桶大小
-    const bucketSize = (data.length - 2) / (maxPoints - 2);
-
-    for (let i = 0; i < maxPoints - 2; i++) {
-        // 计算当前桶的范围
-        const start = Math.floor((i + 0) * bucketSize) + 1;
-        const end = Math.floor((i + 1) * bucketSize) + 1;
-
-        // 计算前一个点和后一个点
-        const previousPoint = result[result.length - 1];
-        const nextPoint = data[Math.min(end, data.length - 1)];
-
-        // 在桶中选择与前后点形成的三角形面积最大的点
-        let maxArea = -1;
-        let selectedPoint = data[start];
-
-        for (let j = start; j < end && j < data.length - 1; j++) {
-            // 计算三角形面积
-            const area = Math.abs(
-                (previousPoint.timestamp - nextPoint.timestamp) * (data[j].value - previousPoint.value) -
-                (previousPoint.timestamp - data[j].timestamp) * (nextPoint.value - previousPoint.value)
-            );
-
-            if (area > maxArea) {
-                maxArea = area;
-                selectedPoint = data[j];
-            }
-        }
-
-        result.push(selectedPoint);
-    }
-
-    result.push(data[data.length - 1]); // 保留最后一个点
-
-    return result;
-};
-
-/**
- * 根据时间范围确定最大数据点数
- */
-const getMaxDataPoints = (timeRange: string): number => {
-    switch (timeRange) {
-        case '15m':
-        case '1h':
-            return 200; // 短时间：详细数据
-        case '12h':
-            return 300;
-        case '24h':
-            return 400;
-        case '7d':
-            return 500;
-        case '30d':
-            return 600;
-        default:
-            return 400;
-    }
-};
-
-/**
- * 生成不重复的颜色
- * 使用 HSL 色轮均匀分布，支持无限数量的监控项
- */
-const generateColors = (count: number): string[] => {
-    const colors: string[] = [];
-    const hueStep = 360 / count; // 色相间隔
-
-    for (let i = 0; i < count; i++) {
-        const hue = (i * hueStep) % 360;
-        const saturation = 65 + (i % 3) * 10; // 65%, 75%, 85% 循环
-        const lightness = 45 + (i % 2) * 10;  // 45%, 55% 循环
-        colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
-    }
-
-    return colors;
-};
-
-/**
- * 自定义图例组件
- */
-const CustomLegend = ({ onClick, selectedMonitors, allMonitorKeys, colors, collapsed }: any) => {
-    if (!allMonitorKeys || allMonitorKeys.length === 0) return null;
-
-    if (collapsed) return null;
-
-    return (
-        <div className="flex flex-wrap justify-center gap-4 pt-4">
-            {allMonitorKeys.map((monitorKey: string, index: number) => {
-                const isSelected = selectedMonitors.has(monitorKey);
-                const color = colors[index];
-
-                return (
-                    <button
-                        type="button"
-                        key={monitorKey}
-                        onClick={() => onClick({ value: monitorKey })}
-                        aria-pressed={isSelected}
-                        className="flex cursor-pointer items-center gap-2 rounded-control px-1 py-0.5 transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-                        style={{
-                            opacity: isSelected ? 1 : 0.4,
-                        }}
-                    >
-                        <svg width="32" height="12" className="overflow-visible">
-                            <line
-                                x1="0"
-                                y1="6"
-                                x2="32"
-                                y2="6"
-                                stroke={isSelected ? color : 'var(--theme-content-muted)'}
-                                strokeWidth="2"
-                            />
-                        </svg>
-                        <span
-                            className="text-xs font-medium"
-                            style={{
-                                color: isSelected ? color : 'var(--theme-content-muted)',
-                            }}
-                        >
-                            {monitorKey}
-                        </span>
-                    </button>
-                );
-            })}
-        </div>
-    );
-};
-
-const MonitorChartImpl = ({agentId, timeRange, start, end, isLive}: ChartPropsBase) => {
+const MonitorChartImpl = ({agentId, timeRange, start, end, isLive, now, liveEnabled}: ChartPropsBase) => {
     const isMobile = useIsMobile();
-    const rangeMs = start !== undefined && end !== undefined ? end - start : undefined;
-    const [selectedMonitors, setSelectedMonitors] = useState<Set<string>>(new Set());
-    const [legendCollapsed, setLegendCollapsed] = useState(true); // 移动端默认收起
-    // 监控任务由探针自定义周期上报，实时模式下保留 15m 视图，10s 重查
-    const effectiveRange = isLive ? '15m' : timeRange;
-
-    // 数据查询
-    const {data: metricsResponse, isLoading, isError} = useMetricsQuery({
-        agentId,
-        type: 'monitor',
-        range: start !== undefined && end !== undefined ? undefined : effectiveRange,
-        start,
-        end,
-        refetchIntervalMs: isLive ? POLLING_INTERVALS.liveHistory : undefined,
-    });
-
-    // 获取所有监控任务的列表（使用名称）
-    const allMonitorKeys = useMemo(() => {
-        const series = metricsResponse?.series || [];
-        return series.map(s => s.labels?.monitor_name || s.labels?.monitor_id || s.name);
-    }, [metricsResponse]);
-
-    // 初始化选中所有监控任务
+    const [legendCollapsed, setLegendCollapsed] = useState(true);
+    const [selected, setSelected] = useState<Set<string>>(new Set());
+    const previousKeys = useRef<Set<string>>(new Set());
+    const {data: metricsResponse, isLoading, isError} = useTrendMetricsQuery({agentId, type:'monitor', timeRange, start, end, liveEnabled});
+    const curves = useMemo(() => getMonitorSeries(metricsResponse?.series ?? []), [metricsResponse]);
     useEffect(() => {
-        if (allMonitorKeys.length > 0 && selectedMonitors.size === 0) {
-            setSelectedMonitors(new Set(allMonitorKeys));
-        }
-    }, [allMonitorKeys, selectedMonitors.size]);
-
-    // 过滤后的监控任务列表
-    const monitorKeys = useMemo(() => {
-        return allMonitorKeys.filter(key => selectedMonitors.has(key));
-    }, [allMonitorKeys, selectedMonitors]);
-
-    // 数据转换 - 支持多个监控任务（统一时间轴 + 线性插值）
-    const chartData = useMemo(() => {
-        const series = metricsResponse?.series || [];
-        if (series.length === 0) return [];
-
-        // 收集所有监控任务的数据
-        const seriesDataArray: Array<{ key: string; data: Array<{ timestamp: number; value: number }> }> = [];
-
-        series.forEach((s) => {
-            const monitorKey = s.labels?.monitor_name || s.labels?.monitor_id || s.name;
-            if (!selectedMonitors.has(monitorKey)) return;
-            if (!s.data || s.data.length === 0) return;
-
-            seriesDataArray.push({
-                key: monitorKey,
-                data: [...s.data].sort((a, b) => a.timestamp - b.timestamp)
-            });
-        });
-
-        if (seriesDataArray.length === 0) return [];
-
-        // 取所有监控任务时间范围的交集，确保每个时间点所有任务都有数据
-        let minTime = -Infinity, maxTime = Infinity;
-        seriesDataArray.forEach(s => {
-            if (s.data.length > 0) {
-                minTime = Math.max(minTime, s.data[0].timestamp);
-                maxTime = Math.min(maxTime, s.data[s.data.length - 1].timestamp);
-            }
-        });
-
-        // 如果没有交集，返回空数组
-        if (minTime >= maxTime) return [];
-
-        // 均匀生成目标时间点
-        const maxPoints = getMaxDataPoints(timeRange);
-        const timeStep = (maxTime - minTime) / (maxPoints - 1);
-        const targetTimestamps: number[] = [];
-        for (let i = 0; i < maxPoints; i++) {
-            targetTimestamps.push(minTime + i * timeStep);
-        }
-
-        // 线性插值函数
-        const interpolate = (data: Array<{ timestamp: number; value: number }>, targetTime: number): number | null => {
-            if (data.length === 0) return null;
-            if (data.length === 1) {
-                // 单点数据，只有精确匹配才返回
-                return data[0].timestamp === targetTime ? data[0].value : null;
-            }
-
-            // 如果目标时间在数据范围外，返回 null（断开折线）
-            if (targetTime < data[0].timestamp || targetTime > data[data.length - 1].timestamp) {
-                return null;
-            }
-
-            // 二分查找找到 targetTime 前后两个点
-            let left = 0, right = data.length - 1;
-            while (right - left > 1) {
-                const mid = Math.floor((left + right) / 2);
-                if (data[mid].timestamp <= targetTime) {
-                    left = mid;
-                } else {
-                    right = mid;
-                }
-            }
-
-            // 线性插值
-            const leftPoint = data[left];
-            const rightPoint = data[right];
-            const ratio = (targetTime - leftPoint.timestamp) / (rightPoint.timestamp - leftPoint.timestamp);
-            return leftPoint.value + ratio * (rightPoint.value - leftPoint.value);
-        };
-
-        // 对每个时间点，从每个监控任务中插值获取值
-        return targetTimestamps.map(timestamp => {
-            const dataPoint: any = { timestamp };
-            seriesDataArray.forEach(s => {
-                const value = interpolate(s.data, timestamp);
-                if (value !== null) {
-                    dataPoint[s.key] = Number(value.toFixed(2));
-                }
-            });
-            return dataPoint;
-        });
-    }, [metricsResponse, selectedMonitors, timeRange, start, end]);
-
-    // 动态生成颜色（根据监控项数量）
-    const colors = useMemo(() => {
-        return generateColors(allMonitorKeys.length);
-    }, [allMonitorKeys.length]);
-
-    const toggleMonitor = (monitorKey: string) => {
-        setSelectedMonitors((current) => {
-            if (current.size === allMonitorKeys.length) return new Set([monitorKey]);
-            const next = new Set(current);
-            if (next.has(monitorKey)) next.delete(monitorKey);
-            else next.add(monitorKey);
-            return next;
-        });
-    };
-
-    const handleAreaClick = (data: unknown) => {
-        const key = (data as {dataKey?: string})?.dataKey;
-        if (key) toggleMonitor(key);
-    };
-
-    const handleLegendClick = (data: {value?: string}) => {
-        if (data?.value) toggleMonitor(data.value);
-    };
-
-    // 恢复全选
-    const handleSelectAll = () => {
-        setSelectedMonitors(new Set(allMonitorKeys));
-    };
-
-    // 是否有监控项未选中（用于显示恢复按钮）
-    const hasUnselected = selectedMonitors.size < allMonitorKeys.length;
-
-    // 切换图例显示/隐藏（仅移动端）
-    const toggleLegend = () => setLegendCollapsed((collapsed) => !collapsed);
-
-    // 渲染
-    if (isLoading) {
-        return (
-            <ChartContainer title="监控响应时间" icon={Activity}>
-                <ChartPlaceholder/>
-            </ChartContainer>
-        );
-    }
-
-    if (isError) return <ChartQueryError title="监控响应时间" icon={Activity}/>;
-
-    // 如果没有数据且不是加载中，不渲染组件
-    if (chartData.length === 0) {
-        return null;
-    }
-
-    return (
-        <ChartContainer title="监控响应时间" icon={Activity}>
-            {chartData.length > 0 ? (
-                <>
-                    {/* 使用提示和恢复按钮 */}
-                    {allMonitorKeys.length > 1 && (
-                        <div className="mb-3 flex items-center justify-between">
-                            <div className="text-xs text-content-muted">
-                                💡 点击图表线条或图例切换显示
-                            </div>
-                            {hasUnselected && (
-                                <button
-                                    type="button"
-                                    onClick={handleSelectAll}
-                                    aria-label="恢复显示全部监控项"
-                                    className="p-1.5 rounded
-                                        text-content-muted
-                                        hover:text-brand
-                                        hover:bg-panel-hover
-                                        transition-colors"
-                                    title="恢复全选"
-                                >
-                                    <RotateCcw size={16} />
-                                </button>
-                            )}
-                        </div>
-                    )}
-
-                    <ResponsiveContainer width="100%" height={250}>
-                        <AreaChart data={chartData}>
-                            <defs>
-                                {monitorKeys.map((key, index) => {
-                                    const originalIndex = allMonitorKeys.indexOf(key);
-                                    return (
-                                        <linearGradient key={key} id={`monitorAreaGradient-${index}`} x1="0" y1="0" x2="0"
-                                                        y2="1">
-                                            <stop offset="5%" stopColor={colors[originalIndex]} stopOpacity={0.4}/>
-                                            <stop offset="95%" stopColor={colors[originalIndex]} stopOpacity={0}/>
-                                        </linearGradient>
-                                    );
-                                })}
-                            </defs>
-                            <CartesianGrid stroke="currentColor" strokeDasharray="4 4"
-                                           className="stroke-line"/>
-                            <XAxis
-                                dataKey="timestamp"
-                                type="number"
-                                scale="time"
-                                domain={['dataMin', 'dataMax']}
-                                tickFormatter={(value) => formatChartTime(Number(value), timeRange, rangeMs)}
-                                stroke="currentColor"
-                                minTickGap={24}
-                                textAnchor="middle"
-                                className="text-xs text-content-secondary tabular-nums"
-                                height={45}
-                            />
-                            <YAxis
-                                stroke="currentColor"
-                                className="stroke-content-muted text-xs"
-                                tickFormatter={(value) => `${value}ms`}
-                            />
-                            <Tooltip
-                                content={<CustomTooltip unit="ms"/>}
-                                wrapperStyle={{zIndex: 9999,}}
-                            />
-                            {monitorKeys.map((key, index) => {
-                                const originalIndex = allMonitorKeys.indexOf(key);
-                                return (
-                                    <Area
-                                        key={key}
-                                        type="monotone"
-                                        dataKey={key}
-                                        name={key}
-                                        stroke={colors[originalIndex]}
-                                        strokeWidth={2}
-                                        fill={`url(#monitorAreaGradient-${index})`}
-                                        activeDot={{r: 3}}
-                                        connectNulls
-                                        onClick={handleAreaClick}
-                                        style={{cursor: 'pointer'}}
-                                        isAnimationActive={!isLive}
-                                    />
-                                );
-                            })}
-                        </AreaChart>
-                    </ResponsiveContainer>
-
-                    {/* 桌面端：直接显示图例 */}
-                    {!isMobile && allMonitorKeys.length > 0 && (
-                        <CustomLegend
-                            onClick={handleLegendClick}
-                            selectedMonitors={selectedMonitors}
-                            allMonitorKeys={allMonitorKeys}
-                            colors={colors}
-                        />
-                    )}
-
-                    {/* 移动端：可折叠图例 */}
-                    {isMobile && allMonitorKeys.length > 0 && (
-                        <div className="pt-4">
-                            <button
-                                type="button"
-                                onClick={toggleLegend}
-                                aria-expanded={!legendCollapsed}
-                                className="w-full flex items-center justify-center gap-2 py-2 text-xs text-content-secondary hover:text-brand"
-                            >
-                                <span>{legendCollapsed ? '显示图例' : '收起图例'}</span>
-                                {legendCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-                            </button>
-                            <CustomLegend
-                                onClick={handleLegendClick}
-                                selectedMonitors={selectedMonitors}
-                                allMonitorKeys={allMonitorKeys}
-                                colors={colors}
-                                collapsed={legendCollapsed}
-                            />
-                        </div>
-                    )}
-                </>
-            ) : (
-                <ChartPlaceholder/>
-            )}
-        </ChartContainer>
-    );
+        const keys = new Set(curves.map(curve => curve.key));
+        const previous = previousKeys.current;
+        setSelected(current => reconcileMonitorSelection(previous, keys, current));
+        previousKeys.current = keys;
+    }, [curves]);
+    const chartData = useMemo(() => buildMonitorChartData(curves, selected, Infinity, !!isLive), [curves, selected, isLive]);
+    const toggle = (key: string) => setSelected(current => {
+        if (current.size === curves.length) return new Set([key]);
+        const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next;
+    });
+    if (isLoading) return <ChartContainer title="监控响应时间" icon={Activity}><ChartPlaceholder/></ChartContainer>;
+    if (isError && !metricsResponse) return <ChartQueryError title="监控响应时间" icon={Activity}/>;
+    if (!curves.length) return null;
+    return <ChartContainer title="监控响应时间" icon={Activity} status={<TrendStatus data={metricsResponse} failed={isError} isLive={isLive} now={now} intervalMs={Math.max(...curves.map(curve => curve.intervalMs ?? 60000))}/>}
+        action={selected.size < curves.length ? <button type="button" aria-label="恢复显示全部监控项" onClick={() => setSelected(new Set(curves.map(curve => curve.key)))} className="rounded-control p-1.5 text-content-muted hover:text-brand"><RotateCcw size={16}/></button> : undefined}>
+        <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="4 4" className="stroke-line"/>
+                <XAxis stroke="currentColor" dataKey="timestamp" type="number" scale="time" domain={trendDomain(isLive, now, metricsResponse, LIVE_MONITOR_WINDOW_MS)} ticks={trendTicks(isLive, now, metricsResponse, LIVE_MONITOR_WINDOW_MS)} allowDataOverflow tickFormatter={value => formatChartTime(Number(value), timeRange, start !== undefined && end !== undefined ? end-start : undefined)} minTickGap={24} className="text-xs text-content-secondary"/>
+                <YAxis stroke="currentColor" tickFormatter={value => `${value}ms`} className="text-xs text-content-secondary"/>
+                <Tooltip content={<CustomTooltip unit="ms" timeFormat={isLive ? 'HH:mm:ss' : undefined}/>}/>
+                {curves.filter(curve => selected.has(curve.key)).map(curve => <Line key={curve.key} dataKey={curve.key} name={curve.name} type="linear" stroke={INTERFACE_COLORS[curves.indexOf(curve) % INTERFACE_COLORS.length].download} dot={{r:2}} activeDot={{r:3}} connectNulls={false} isAnimationActive={!isLive}/>)}
+            </LineChart>
+        </ResponsiveContainer>
+        {isMobile && <button type="button" onClick={() => setLegendCollapsed(value => !value)} aria-expanded={!legendCollapsed} className="flex w-full items-center justify-center gap-2 py-2 text-xs text-content-secondary">{legendCollapsed ? '显示图例' : '收起图例'}{legendCollapsed ? <ChevronDown size={16}/> : <ChevronUp size={16}/>}</button>}
+        {(!isMobile || !legendCollapsed) && <div className="flex flex-wrap justify-center gap-4 pt-4">
+            {curves.map((curve,index) => <button type="button" key={curve.key} aria-pressed={selected.has(curve.key)} onClick={() => toggle(curve.key)} className="flex items-center gap-2 rounded-control px-1 py-0.5 text-xs" style={{opacity:selected.has(curve.key) ? 1 : .4, color:INTERFACE_COLORS[index % INTERFACE_COLORS.length].download}}><span className="h-0.5 w-6 bg-current"/>{curve.name}</button>)}
+        </div>}
+    </ChartContainer>;
 };
-
 const MonitorChart = memo(MonitorChartImpl);
 
 /* ========================================== ServerDetail ========================================== */
@@ -1971,12 +1187,20 @@ const ServerDetail = () => {
     };
 
     const isLive = timeRange === LIVE_RANGE;
+    const [clock, setClock] = useState(Date.now);
+    useEffect(() => {
+        if (!isLive) return;
+        const timer = window.setInterval(() => setClock(Date.now()), 2000);
+        return () => window.clearInterval(timer);
+    }, [isLive]);
     const customStart = timeRange === 'custom' ? customRange?.start : undefined;
     const customEnd = timeRange === 'custom' ? customRange?.end : undefined;
 
     // 查询基础数据（用于页面头部和系统信息）
     const {data: agentResponse, isLoading, isError, error, refetch} = useAgentQuery(id);
     const isOnline = isAgentOnline(agentResponse);
+    const liveQuery = useLiveMetricsQuery(id ?? '', isLive, isOnline);
+    const windowEnd = liveQuery.data ? liveQuery.data.generatedAt + Math.max(0, clock - liveQuery.dataUpdatedAt) : clock;
     const {
         data: latestMetricsResponse,
         isError: isLatestMetricsError,
@@ -2059,38 +1283,37 @@ const ServerDetail = () => {
                             {/* 核心指标：大屏 2 列，小屏 1 列 */}
                             <div className="grid gap-4 sm:gap-5 lg:gap-6 grid-cols-1 md:grid-cols-2">
                                 <CpuChart agentId={id!} timeRange={timeRange} start={customStart} end={customEnd}
-                                          isLive={isLive} latestMetrics={latestMetrics}/>
+                                          isLive={isLive} now={windowEnd} liveEnabled={isOnline}/>
                                 <MemoryChart agentId={id!} timeRange={timeRange} start={customStart} end={customEnd}
-                                             isLive={isLive} latestMetrics={latestMetrics}/>
+                                             isLive={isLive} now={windowEnd} liveEnabled={isOnline}/>
                             </div>
 
                             {/* 网络相关：大屏 2 列，中屏 1 列 */}
                             <div className="grid gap-4 sm:gap-5 lg:gap-6 grid-cols-1 lg:grid-cols-2">
                                 <NetworkChart agentId={id!} timeRange={timeRange} start={customStart} end={customEnd}
-                                              isLive={isLive} latestMetrics={latestMetrics}/>
+                                              isLive={isLive} now={windowEnd} liveEnabled={isOnline}/>
                                 <DiskIOChart agentId={id!} timeRange={timeRange} start={customStart} end={customEnd}
-                                             isLive={isLive} latestMetrics={latestMetrics}/>
+                                             isLive={isLive} now={windowEnd} liveEnabled={isOnline}/>
                             </div>
 
                             {/* 进阶指标：单列全宽 */}
                             <div className="grid gap-4 sm:gap-5 lg:gap-6 grid-cols-1">
                                 <NetworkConnectionChart agentId={id!} timeRange={timeRange} start={customStart}
-                                                        end={customEnd} isLive={isLive}
-                                                        latestMetrics={latestMetrics}/>
+                                                        end={customEnd} isLive={isLive} now={windowEnd} liveEnabled={isOnline}/>
                             </div>
 
                             {/* 硬件指标：条件渲染，单列全宽 */}
                             <div className="grid gap-4 sm:gap-5 lg:gap-6 grid-cols-1">
                                 <GpuChart agentId={id!} timeRange={timeRange} start={customStart} end={customEnd}
-                                          isLive={isLive}/>
+                                          isLive={isLive} now={windowEnd} liveEnabled={isOnline}/>
                                 <TemperatureChart agentId={id!} timeRange={timeRange} start={customStart}
-                                                  end={customEnd} isLive={isLive}/>
+                                                  end={customEnd} isLive={isLive} now={windowEnd} liveEnabled={isOnline}/>
                             </div>
 
                             {/* 监控指标：单列全宽 */}
                             <div className="grid gap-4 sm:gap-5 lg:gap-6 grid-cols-1">
                                 <MonitorChart agentId={id!} timeRange={timeRange} start={customStart} end={customEnd}
-                                              isLive={isLive}/>
+                                              isLive={isLive} now={windowEnd} liveEnabled={isOnline}/>
                             </div>
                         </div>
                     </Card>

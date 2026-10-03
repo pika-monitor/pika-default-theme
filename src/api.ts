@@ -3,7 +3,7 @@
 import type {
     PikaRuntimeConfig, ColorMode,
     Agent, LatestMetrics, PublicMonitor, AgentMonitorStat,
-    MetricsResponse, MetricsParams, HistoryParams,
+    MetricsResponse, MetricsParams, HistoryParams, LiveMetricsResponse,
     TagsResponse, NetworkInterfacesResponse, ListAgentParams, CurrentUser,
 } from './types';
 
@@ -16,13 +16,14 @@ export class PikaAPIError extends Error {
 
 type Query = Record<string, string | number | boolean | undefined>;
 
-const request = async <T>(path: string, query?: Query): Promise<T> => {
+const request = async <T>(path: string, query?: Query, signal?: AbortSignal): Promise<T> => {
     const search = new URLSearchParams();
     for (const [key, value] of Object.entries(query || {})) {
         if (value !== undefined) search.set(key, String(value));
     }
     const token = typeof localStorage === 'undefined' ? null : localStorage.getItem('token');
     const response = await fetch('/api' + path + (search.size ? '?' + search : ''), {
+        signal,
         headers: token ? {Authorization: 'Bearer ' + token} : {},
     });
     const contentType = response.headers.get('content-type') || '';
@@ -42,8 +43,10 @@ export const pika = {
     getAgent: <T = Agent>(id: string) => request<T>('/agents/' + encodeURIComponent(id)),
     getLatestMetrics: <T = LatestMetrics>(id: string) =>
         request<T>('/agents/' + encodeURIComponent(id) + '/metrics/latest'),
-    getMetrics: <T = MetricsResponse>(id: string, params: MetricsParams = {}) =>
-        request<T>('/agents/' + encodeURIComponent(id) + '/metrics', params),
+    getLiveMetrics: (id: string, signal?: AbortSignal) =>
+        request<LiveMetricsResponse>('/agents/' + encodeURIComponent(id) + '/metrics/live', undefined, signal),
+    getMetrics: <T = MetricsResponse>(id: string, params: MetricsParams = {}, signal?: AbortSignal) =>
+        request<T>('/agents/' + encodeURIComponent(id) + '/metrics', params, signal),
     getTags: <T = TagsResponse>() => request<T>('/agents/tags'),
     getNetworkInterfaces: <T = NetworkInterfacesResponse>(id: string) =>
         request<T>('/agents/' + encodeURIComponent(id) + '/network-interfaces'),

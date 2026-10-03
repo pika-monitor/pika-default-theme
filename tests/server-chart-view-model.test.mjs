@@ -5,7 +5,7 @@ import ts from 'typescript';
 
 const source = await readFile(new URL('../src/domain/agents/server-chart-view-model.ts', import.meta.url), 'utf8');
 const {outputText} = ts.transpileModule(source, {compilerOptions: {module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022}});
-const {getGpuSeries, buildGpuChartData, getMonitorSeries, buildMonitorChartData, reconcileMonitorSelection, formatMetricNumber} = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
+const {buildMetricChartData, getGpuSeries, buildGpuChartData, getMonitorSeries, buildMonitorChartData, reconcileMonitorSelection, formatMetricNumber} = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 
 const series = (id, name, data) => ({name: 'response_time', labels: {monitor_id: id, monitor_name: name}, data});
 const point = (timestamp, value) => ({timestamp, value});
@@ -73,4 +73,43 @@ test('missing or non-finite values are distinct from measured zero', () => {
     for (const value of [undefined, null, NaN, Infinity]) assert.equal(formatMetricNumber(value, 1, '%'), '—');
     assert.equal(formatMetricNumber(0, 1, '%'), '0.0%');
     assert.equal(formatMetricNumber(0, 2), '0.00');
+});
+
+
+test('core series preserve missing values instead of manufacturing zero measurements', () => {
+    const rows = buildMetricChartData([
+        {name: 'read', data: [point(2000, 0), point(4000, 99)]},
+        {name: 'write', data: [point(4000, 2), point(6000, 3)]},
+    ], ['read', 'write']);
+    assert.deepEqual(rows, [
+        {timestamp: 2000, read: 0, write: null},
+        {timestamp: 4000, read: 99, write: 2},
+        {timestamp: 6000, read: null, write: 3},
+    ]);
+});
+
+test('real-time outages produce a break; valid 2s samples retain their peaks', () => {
+    const series = [{name: 'usage', data: [point(2000, 1), point(4000, 99), point(6000, 2), point(20000, 3)]}];
+    const rows = buildMetricChartData(series, ['usage'], undefined, 6000);
+    assert.deepEqual(rows, [
+        {timestamp: 2000, usage: 1}, {timestamp: 4000, usage: 99},
+        {timestamp: 6000, usage: 2}, {timestamp: 6001, usage: null}, {timestamp: 20000, usage: 3},
+    ]);
+    assert.equal(buildMetricChartData(series, ['usage']).length, 4);
+});
+
+test('core series sort and deduplicate timestamps and reject invalid measurements', () => {
+    const rows = buildMetricChartData([{name: 'usage', data: [point(4000, 1), point(2000, 2), point(4000, 3), point(NaN, 1), point(6000, Infinity)]}], ['usage']);
+    assert.deepEqual(rows, [{timestamp: 2000, usage: 2}, {timestamp: 4000, usage: 3}]);
+});
+
+
+test('monitor collection gaps break live curves but do not break aggregated history', () => {
+    const curves = getMonitorSeries([{name:'response_time',labels:{monitor_id:'a',interval_ms:'60000'},data:[point(1000,1),point(601000,99)]}]);
+    const selected = new Set(['monitor_a']);
+    const live = buildMonitorChartData(curves, selected);
+    assert.equal(live.find(row=>row.timestamp===1001).monitor_a,null);
+    const history = buildMonitorChartData(curves, selected, Infinity, false);
+    assert.equal(history.length,2);
+    assert.equal(history[1].monitor_a,99);
 });

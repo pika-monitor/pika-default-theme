@@ -261,7 +261,28 @@ export interface AgentMonitorStat {
 
 export interface MetricPoint {timestamp: number; value: number}
 export interface MetricSeries {name: string; labels?: Record<string, string>; data: MetricPoint[]}
-export interface MetricsResponse {agentId: string; type: string; range: string; series: MetricSeries[]}
+export interface MetricsResponse {
+    agentId: string;
+    type: string;
+    range: string;
+    series: MetricSeries[];
+    start?: number;
+    end?: number;
+    failedSeries?: string[];
+    latestSampleAt?: number;
+    historyError?: string;
+}
 export interface TagsResponse {tags: string[]}
 export interface NetworkInterfacesResponse {interfaces: string[]}
 export interface CurrentUser {userId: string; username: string}
+
+export interface LiveMetricsResponse {
+    agentId: string;
+    generatedAt: number;
+    start: number;
+    end: number;
+    monitorStart: number;
+    series: Partial<Record<NonNullable<MetricsParams['type']>, MetricSeries[]>>;
+    latestSampleAt: Partial<Record<NonNullable<MetricsParams['type']>, number>>;
+    historyError?: string;
+}

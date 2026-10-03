@@ -72,7 +72,7 @@ export const TimeRangeSelector = ({value, onChange, options, enableCustom = fals
                 </button>
             )}
             {enableCustom && customOpen && (
-                <div id={`${idPrefix}-custom-range`} className="flex w-full flex-wrap items-center justify-end gap-2 pt-1">
+                <div id={`${idPrefix}-custom-range`} className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
                     <label htmlFor={`${idPrefix}-start`} className="sr-only">开始时间</label>
                     <input id={`${idPrefix}-start`} aria-label="开始时间" type="datetime-local" value={customStart} onChange={(event) => setCustomStart(event.target.value)} className={cn(controlClass, 'px-2 py-1')}/>
                     <span className="text-sm text-content-muted">至</span>

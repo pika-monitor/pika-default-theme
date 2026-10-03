@@ -18,6 +18,7 @@ export interface GpuSeries {
     metricType: 'utilization' | 'temperature';
     name: string;
     points: MetricPoint[];
+    intervalMs?: number;
 }
 
 export const getGpuSeries = (series: MetricSeries[]): GpuSeries[] => {
@@ -34,6 +35,7 @@ export const getGpuSeries = (series: MetricSeries[]): GpuSeries[] => {
             metricType,
             name: `GPU ${gpuIndex} ${metricType === 'utilization' ? '使用率 (%)' : '温度 (°C)'}`,
             points: [...(existing?.points ?? []), ...entry.data],
+            intervalMs: Number(entry.labels?.interval_ms) || undefined,
         });
     }
     return [...grouped.values()]
@@ -58,6 +60,7 @@ export interface MonitorSeries {
     key: string;
     name: string;
     points: MetricPoint[];
+    intervalMs?: number;
 }
 
 export const getMonitorSeries = (series: MetricSeries[]): MonitorSeries[] => {
@@ -70,6 +73,7 @@ export const getMonitorSeries = (series: MetricSeries[]): MonitorSeries[] => {
             key,
             name: entry.labels?.monitor_name ?? id,
             points: [...(existing?.points ?? []), ...entry.data],
+            intervalMs: Number(entry.labels?.interval_ms) || undefined,
         });
     }
     return [...grouped.values()]
@@ -77,7 +81,7 @@ export const getMonitorSeries = (series: MetricSeries[]): MonitorSeries[] => {
         .sort((a, b) => a.key.localeCompare(b.key));
 };
 
-const interpolate = (points: MetricPoint[], timestamp: number): number | null => {
+const interpolate = (points: MetricPoint[], timestamp: number, maxGapMs = Infinity): number | null => {
     if (!points.length || timestamp < points[0].timestamp || timestamp > points[points.length - 1].timestamp) return null;
     let left = 0;
     let right = points.length - 1;
@@ -88,17 +92,22 @@ const interpolate = (points: MetricPoint[], timestamp: number): number | null =>
     }
     if (points[left].timestamp === timestamp) return points[left].value;
     if (points[right].timestamp === timestamp) return points[right].value;
+    if (points[right].timestamp - points[left].timestamp > maxGapMs) return null;
     const ratio = (timestamp - points[left].timestamp) / (points[right].timestamp - points[left].timestamp);
     return Number((points[left].value + ratio * (points[right].value - points[left].value)).toFixed(2));
 };
 
-export const buildMonitorChartData = (series: MonitorSeries[], selected: ReadonlySet<string>): ChartPoint[] => {
+export const buildMonitorChartData = (series: MonitorSeries[], selected: ReadonlySet<string>, defaultMaxGapMs = Infinity, respectIntervals = true): ChartPoint[] => {
     const visible = series.filter(entry => selected.has(entry.key));
     // Keep every original timestamp, including single-point series and peaks.
-    const timestamps = [...new Set(visible.flatMap(entry => entry.points.map(point => point.timestamp)))].sort((a, b) => a - b);
+    const maxGap = (entry: MonitorSeries) => respectIntervals && entry.intervalMs ? entry.intervalMs * 3 : defaultMaxGapMs;
+    const gaps = visible.flatMap(entry => entry.points.slice(1).flatMap((point, index) =>
+        point.timestamp - entry.points[index].timestamp > maxGap(entry)
+            ? [entry.points[index].timestamp + 1] : []));
+    const timestamps = [...new Set([...visible.flatMap(entry => entry.points.map(point => point.timestamp)), ...gaps])].sort((a, b) => a - b);
     return timestamps.map(timestamp => {
         const row: ChartPoint = {timestamp};
-        for (const entry of visible) row[entry.key] = interpolate(entry.points, timestamp);
+        for (const entry of visible) row[entry.key] = interpolate(entry.points, timestamp, maxGap(entry));
         return row;
     });
 };
@@ -113,3 +122,44 @@ export const reconcileMonitorSelection = (previous: ReadonlySet<string>, next: R
 export const formatMetricNumber = (value: number | undefined | null, digits = 1, suffix = ''): string => (
     typeof value === 'number' && Number.isFinite(value) ? `${value.toFixed(digits)}${suffix}` : '—'
 );
+
+// Align only values actually returned by the API. Missing measurements stay
+// null; a long gap gets an empty row so the chart does not bridge the outage.
+export const buildMetricChartData = <K extends string>(
+    series: MetricSeries[],
+    keys: readonly K[],
+    transform: (value: number) => number = value => Number(value.toFixed(2)),
+    maxGapMs = Infinity,
+): Array<{timestamp: number} & Record<K, number | null>> => {
+    type Row = {timestamp: number} & Record<K, number | null>;
+    const emptyRow = (timestamp: number): Row => Object.assign({timestamp}, Object.fromEntries(keys.map(key => [key, null]))) as Row;
+    const rows = new Map<number, Row>();
+    for (const entry of series) {
+        if (!keys.includes(entry.name as K)) continue;
+        for (const point of entry.data) {
+            if (!Number.isFinite(point.timestamp) || !Number.isFinite(point.value)) continue;
+            const value = transform(point.value);
+            if (!Number.isFinite(value)) continue;
+            const row = rows.get(point.timestamp) ?? emptyRow(point.timestamp);
+            Object.assign(row, {[entry.name]: value});
+            rows.set(point.timestamp, row);
+        }
+    }
+    const sorted = [...rows.values()].sort((a, b) => a.timestamp - b.timestamp);
+    const result: Row[] = [];
+    for (const row of sorted) {
+        const previous = result.at(-1);
+        if (previous && row.timestamp - previous.timestamp > maxGapMs) {
+            result.push(emptyRow(previous.timestamp + 1));
+        }
+        result.push(row);
+    }
+    return result;
+};
+
+export const getTemperatureSeries = (series: MetricSeries[]): MonitorSeries[] => series.map(entry => ({
+    key: `temperature_${entry.labels?.sensor_key ?? entry.name}`,
+    name: entry.name,
+    points: normalizePoints(entry.data),
+    intervalMs: 15000,
+})).sort((a, b) => a.key.localeCompare(b.key));
